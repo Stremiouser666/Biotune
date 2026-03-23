@@ -7,18 +7,26 @@ export type AudioMode = 'synth' | 'sampled' | 'custom';
 export type OscillatorType = 'sine' | 'triangle' | 'square' | 'sawtooth';
 export type NoteLength = '16n' | '8n' | '4n';
 
-interface SessionState {
+interface SceneData {
   melodyGrid: boolean[][];
   drumGrid: boolean[][];
+  melodyLength: number;
+  drumLength: number;
+}
+
+interface SessionState {
+  scenes: SceneData[];
+  activeSceneIndex: number;
   drumMutes: boolean[];
   rootNote: string;
   reverbWet: number;
+  delayWet: number;
+  delayFeedback: number;
+  filterFrequency: number;
   swingAmount: number;
   chordMode: boolean;
   bpm: number;
   masterVolume: number;
-  melodyLength: number;
-  drumLength: number;
   oscillatorType: OscillatorType;
   noteLength: NoteLength;
   micSensitivity: number;
@@ -35,6 +43,8 @@ class AudioEngine {
   private customPianoSampler: Tone.Sampler | null = null;
   private customDrumPlayers: Tone.Players | null = null;
   
+  private filter: Tone.Filter;
+  private delay: Tone.FeedbackDelay;
   private reverb: Tone.Reverb;
   private masterGain: Tone.Gain;
   private recorder: Tone.Recorder;
@@ -45,12 +55,16 @@ class AudioEngine {
   private chordMode: boolean = false;
   private currentSlot: string = 'A';
   
-  // Sequencer State
-  private melodyGrid: boolean[][] = Array(8).fill(null).map(() => Array(16).fill(false));
-  private drumGrid: boolean[][] = Array(4).fill(null).map(() => Array(16).fill(false));
+  // Multi-Scene State
+  private scenes: SceneData[] = Array(4).fill(null).map(() => ({
+    melodyGrid: Array(8).fill(null).map(() => Array(16).fill(false)),
+    drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
+    melodyLength: 8,
+    drumLength: 16,
+  }));
+  private activeSceneIndex = 0;
+
   private drumMutes: boolean[] = [false, false, false, false];
-  private melodyLength: number = 8;
-  private drumLength: number = 16;
   private oscillatorType: OscillatorType = 'triangle';
   private noteLength: NoteLength = '4n';
   
@@ -71,12 +85,15 @@ class AudioEngine {
   private onStepListeners: Set<(step: number) => void> = new Set();
   private onDrumHitListeners: Set<() => void> = new Set();
   private onLoadListeners: Set<(loaded: boolean) => void> = new Set();
+  private onSceneChangeListeners: Set<(index: number) => void> = new Set();
 
   constructor() {
     this.reverb = new Tone.Reverb({ decay: 2.5, wet: 0.25 }).toDestination();
-    this.masterGain = new Tone.Gain(1).connect(this.reverb);
-    this.recorder = new Tone.Recorder();
+    this.delay = new Tone.FeedbackDelay("8n", 0.3).connect(this.reverb);
+    this.filter = new Tone.Filter(20000, "lowpass").connect(this.delay);
+    this.masterGain = new Tone.Gain(1).connect(this.filter);
     
+    this.recorder = new Tone.Recorder();
     this.reverb.connect(this.recorder);
 
     this.synth = new Tone.PolySynth(Tone.Synth).connect(this.masterGain);
@@ -162,20 +179,44 @@ class AudioEngine {
     return this.chordMode;
   }
 
+  public setScene(index: number) {
+    if (index < 0 || index >= this.scenes.length) return;
+    this.activeSceneIndex = index;
+    this.onSceneChangeListeners.forEach(l => l(index));
+    this.saveSession();
+  }
+
+  public getActiveSceneIndex() {
+    return this.activeSceneIndex;
+  }
+
+  public addOnSceneChange(callback: (idx: number) => void) {
+    this.onSceneChangeListeners.add(callback);
+  }
+
   public loadSession(dataToLoad?: any) {
     if (typeof window === 'undefined') return null;
     const key = `biotune_session_${this.currentSlot}`;
     const saved = dataToLoad || JSON.parse(localStorage.getItem(key) || 'null');
     if (saved) {
       try {
-        this.melodyGrid = saved.melodyGrid || Array(8).fill(null).map(() => Array(16).fill(false));
-        this.drumGrid = saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false));
+        if (saved.scenes) {
+          this.scenes = saved.scenes;
+          this.activeSceneIndex = saved.activeSceneIndex || 0;
+        } else {
+          // Fallback for old single-scene saves
+          this.scenes[0] = {
+            melodyGrid: saved.melodyGrid || Array(8).fill(null).map(() => Array(16).fill(false)),
+            drumGrid: saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false)),
+            melodyLength: saved.melodyLength || 8,
+            drumLength: saved.drumLength || 16,
+          };
+        }
+
         this.drumMutes = saved.drumMutes || [false, false, false, false];
         this.rootNote = saved.rootNote || "C";
         this.swingAmount = saved.swingAmount || 0;
         this.chordMode = !!saved.chordMode;
-        this.melodyLength = saved.melodyLength || 8;
-        this.drumLength = saved.drumLength || 16;
         this.oscillatorType = saved.oscillatorType || 'triangle';
         this.noteLength = saved.noteLength || '4n';
         this.micSensitivity = saved.micSensitivity || 1.0;
@@ -187,6 +228,8 @@ class AudioEngine {
         this.updateScale(this.rootNote);
         this.setOscillator(this.oscillatorType);
         if (saved.reverbWet !== undefined) this.setReverb(saved.reverbWet);
+        if (saved.delayWet !== undefined) this.setDelay(saved.delayWet, saved.delayFeedback || 0.5);
+        if (saved.filterFrequency !== undefined) this.setFilter(saved.filterFrequency);
         if (saved.masterVolume !== undefined) this.setMasterVolume(saved.masterVolume);
         
         return saved;
@@ -198,18 +241,20 @@ class AudioEngine {
   }
 
   public getSessionData(): SessionState {
+    const currentScene = this.scenes[this.activeSceneIndex];
     return {
-      melodyGrid: this.melodyGrid,
-      drumGrid: this.drumGrid,
+      scenes: this.scenes,
+      activeSceneIndex: this.activeSceneIndex,
       drumMutes: this.drumMutes,
       rootNote: this.rootNote,
       reverbWet: this.reverb.wet.value,
+      delayWet: this.delay.wet.value,
+      delayFeedback: this.delay.feedback.value,
+      filterFrequency: this.filter.frequency.value as number,
       swingAmount: this.swingAmount,
       chordMode: this.chordMode,
       bpm: Tone.getTransport().bpm.value,
       masterVolume: this.masterGain.gain.value,
-      melodyLength: this.melodyLength,
-      drumLength: this.drumLength,
       oscillatorType: this.oscillatorType,
       noteLength: this.noteLength,
       micSensitivity: this.micSensitivity,
@@ -225,8 +270,13 @@ class AudioEngine {
 
   public resetSession() {
     this.pushUndo();
-    this.melodyGrid = Array(8).fill(null).map(() => Array(16).fill(false));
-    this.drumGrid = Array(4).fill(null).map(() => Array(16).fill(false));
+    this.scenes = Array(4).fill(null).map(() => ({
+      melodyGrid: Array(8).fill(null).map(() => Array(16).fill(false)),
+      drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
+      melodyLength: 8,
+      drumLength: 16,
+    }));
+    this.activeSceneIndex = 0;
     this.drumMutes = [false, false, false, false];
     this.saveSession();
   }
@@ -266,24 +316,25 @@ class AudioEngine {
     if (this.repeatEvent !== null) Tone.getTransport().clear(this.repeatEvent);
     
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
-      const melodyStep = this.currentStep % this.melodyLength;
-      this.melodyGrid.forEach((row, rowIndex) => {
+      const scene = this.scenes[this.activeSceneIndex];
+      const melodyStep = this.currentStep % scene.melodyLength;
+      scene.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) {
           this.triggerNoteAtTime(rowIndex, time);
         }
       });
 
-      const drumStep = this.currentStep % this.drumLength;
-      if (this.drumGrid[0][drumStep] && !this.drumMutes[0]) this.triggerDrum('hard', time); 
-      if (this.drumGrid[1][drumStep] && !this.drumMutes[1]) this.triggerDrum('soft', time); 
-      if (this.drumGrid[2][drumStep] && !this.drumMutes[2]) this.triggerDrum('roll', time); 
-      if (this.drumGrid[3][drumStep] && !this.drumMutes[3]) this.triggerDrum('soft', time); 
+      const drumStep = this.currentStep % scene.drumLength;
+      if (scene.drumGrid[0][drumStep] && !this.drumMutes[0]) this.triggerDrum('hard', time); 
+      if (scene.drumGrid[1][drumStep] && !this.drumMutes[1]) this.triggerDrum('soft', time); 
+      if (scene.drumGrid[2][drumStep] && !this.drumMutes[2]) this.triggerDrum('roll', time); 
+      if (scene.drumGrid[3][drumStep] && !this.drumMutes[3]) this.triggerDrum('soft', time); 
 
       Tone.Draw.schedule(() => {
         this.onStepListeners.forEach(listener => listener(this.currentStep));
       }, time);
 
-      this.currentStep = (this.currentStep + 1) % 16; // Use 16 as the global master loop
+      this.currentStep = (this.currentStep + 1) % 16;
     }, "16n");
   }
 
@@ -312,10 +363,23 @@ class AudioEngine {
   getSwing() { return this.swingAmount; }
 
   setReverb(wet: number) {
-    this.reverb.wet.rampTo(wet, 0.5);
+    this.reverb.wet.rampTo(wet, 0.1);
     this.saveSession();
   }
   getReverb() { return this.reverb.wet.value; }
+
+  setDelay(wet: number, feedback: number) {
+    this.delay.wet.rampTo(wet, 0.1);
+    this.delay.feedback.rampTo(feedback, 0.1);
+    this.saveSession();
+  }
+  getDelay() { return { wet: this.delay.wet.value, feedback: this.delay.feedback.value }; }
+
+  setFilter(freq: number) {
+    this.filter.frequency.rampTo(freq, 0.1);
+    this.saveSession();
+  }
+  getFilter() { return this.filter.frequency.value as number; }
 
   setMasterVolume(val: number) {
     this.masterGain.gain.rampTo(val, 0.1);
@@ -337,16 +401,16 @@ class AudioEngine {
 
   getNotes() { return this.notes; }
 
-  getMelodyGrid() { return this.melodyGrid; }
+  getMelodyGrid() { return this.scenes[this.activeSceneIndex].melodyGrid; }
   toggleMelody(row: number, col: number) { 
     this.pushUndo();
-    this.melodyGrid[row][col] = !this.melodyGrid[row][col]; 
+    this.scenes[this.activeSceneIndex].melodyGrid[row][col] = !this.scenes[this.activeSceneIndex].melodyGrid[row][col]; 
     this.saveSession();
   }
   
   randomizeMelody() {
     this.pushUndo();
-    this.melodyGrid = this.melodyGrid.map(() => 
+    this.scenes[this.activeSceneIndex].melodyGrid = this.scenes[this.activeSceneIndex].melodyGrid.map(() => 
       Array(16).fill(null).map(() => Math.random() > 0.85)
     );
     this.saveSession();
@@ -354,44 +418,45 @@ class AudioEngine {
 
   clearMelodyRow(row: number) {
     this.pushUndo();
-    this.melodyGrid[row] = Array(16).fill(false);
+    this.scenes[this.activeSceneIndex].melodyGrid[row] = Array(16).fill(false);
     this.saveSession();
   }
 
   setMelodyLength(len: number) {
-    this.melodyLength = len;
+    this.scenes[this.activeSceneIndex].melodyLength = len;
     this.saveSession();
   }
-  getMelodyLength() { return this.melodyLength; }
+  getMelodyLength() { return this.scenes[this.activeSceneIndex].melodyLength; }
 
-  getDrumGrid() { return this.drumGrid; }
+  getDrumGrid() { return this.scenes[this.activeSceneIndex].drumGrid; }
   toggleDrumStep(padIndex: number, stepIndex: number) { 
     this.pushUndo();
-    this.drumGrid[padIndex][stepIndex] = !this.drumGrid[padIndex][stepIndex]; 
+    this.scenes[this.activeSceneIndex].drumGrid[padIndex][stepIndex] = !this.scenes[this.activeSceneIndex].drumGrid[padIndex][stepIndex]; 
     this.saveSession();
   }
 
   randomizeDrums(row?: number) {
     this.pushUndo();
+    const scene = this.scenes[this.activeSceneIndex];
     if (row !== undefined) {
-      this.drumGrid[row] = Array(16).fill(null).map(() => Math.random() > 0.8);
+      scene.drumGrid[row] = Array(16).fill(null).map(() => Math.random() > 0.8);
     } else {
-      this.drumGrid = this.drumGrid.map(() => Array(16).fill(null).map(() => Math.random() > 0.8));
+      scene.drumGrid = scene.drumGrid.map(() => Array(16).fill(null).map(() => Math.random() > 0.8));
     }
     this.saveSession();
   }
 
   clearDrumRow(row: number) {
     this.pushUndo();
-    this.drumGrid[row] = Array(16).fill(false);
+    this.scenes[this.activeSceneIndex].drumGrid[row] = Array(16).fill(false);
     this.saveSession();
   }
 
   setDrumLength(len: number) {
-    this.drumLength = len;
+    this.scenes[this.activeSceneIndex].drumLength = len;
     this.saveSession();
   }
-  getDrumLength() { return this.drumLength; }
+  getDrumLength() { return this.scenes[this.activeSceneIndex].drumLength; }
 
   toggleDrumMute(index: number) {
     this.drumMutes[index] = !this.drumMutes[index];

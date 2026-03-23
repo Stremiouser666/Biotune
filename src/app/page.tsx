@@ -8,7 +8,7 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5 } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,7 @@ export default function BiotuneApp() {
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
   const [chordMode, setChordMode] = useState(false);
   const [activeSlot, setActiveSlot] = useState('A');
+  const [activeScene, setActiveScene] = useState(0);
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
   const [isLoaded, setIsLoaded] = useState(false);
   const tapTimes = useRef<number[]>([]);
@@ -58,6 +59,10 @@ export default function BiotuneApp() {
       };
       audioEngine.addOnDrumHit(handleHit);
       audioEngine.addOnLoad(setIsLoaded);
+      audioEngine.addOnSceneChange((idx) => {
+        setActiveScene(idx);
+        setSessionVersion(v => v + 1);
+      });
       
       const params = new URLSearchParams(window.location.search);
       const sharedData = params.get('session');
@@ -68,6 +73,7 @@ export default function BiotuneApp() {
           setRootNote(data.rootNote || "C");
           setChordMode(!!data.chordMode);
           setBpm(data.bpm || 80);
+          setActiveScene(data.activeSceneIndex || 0);
           toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
         } catch (e) {
           console.error("Failed to parse shared session", e);
@@ -168,6 +174,7 @@ export default function BiotuneApp() {
       setRootNote(data.rootNote || "C");
       setBpm(data.bpm || audioEngine?.getBPM() || 80);
       setChordMode(!!data.chordMode);
+      setActiveScene(data.activeSceneIndex || 0);
       toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: `No saved data in slot ${activeSlot}.` });
@@ -181,6 +188,7 @@ export default function BiotuneApp() {
       setRootNote(lastState.rootNote || "C");
       setBpm(lastState.bpm || 80);
       setChordMode(!!lastState.chordMode);
+      setActiveScene(lastState.activeSceneIndex || 0);
       toast({ title: "Action Undone", description: "Reverted to previous state." });
     } else {
       toast({ title: "Nothing to Undo", description: "History is empty." });
@@ -202,6 +210,7 @@ export default function BiotuneApp() {
       setRootNote(data.rootNote || "C");
       setChordMode(!!data.chordMode);
       setBpm(data.bpm || 80);
+      setActiveScene(data.activeSceneIndex || 0);
     }
   };
 
@@ -344,6 +353,31 @@ export default function BiotuneApp() {
                         <button onClick={() => setOnboardingStep(1)} className="bg-primary text-white py-2 rounded-lg">NEXT: MELODY</button>
                       </div>
                     )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="scenes" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
+                    <div className="flex items-center gap-3"><Repeat className="w-5 h-5 text-primary" /><span className="font-headline text-black">PATTERN SCENES</span></div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2 space-y-4">
+                    <div className="p-4 bg-white/30 rounded-2xl border border-white/40 shadow-lg flex flex-col gap-3">
+                      <p className="text-[10px] font-headline opacity-60 text-center">SWITCH PATTERNS LIVE</p>
+                      <div className="flex gap-2">
+                        {[0, 1, 2, 3].map(idx => (
+                          <button 
+                            key={idx}
+                            onClick={() => audioEngine?.setScene(idx)}
+                            className={cn(
+                              "flex-1 py-4 rounded-xl font-headline text-sm transition-all",
+                              activeScene === idx ? "bg-primary text-white shadow-[0_0_15px_rgba(255,77,255,0.5)] scale-105" : "bg-white/40"
+                            )}
+                          >
+                            {idx + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
 
@@ -520,13 +554,32 @@ export default function BiotuneApp() {
                             <Slider defaultValue={[1]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setMasterVolume(val)} />
                           </div>
                         </div>
-                        <div className="flex items-center gap-6">
-                          <Sparkles className="w-5 h-5 opacity-40 shrink-0" />
-                          <div className="flex-1 space-y-2">
-                            <div className="text-[10px] font-headline opacity-40 text-left">MAGIC REVERB</div>
-                            <Slider defaultValue={[0.2]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setReverb(val)} />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="flex items-center gap-4">
+                            <Sparkles className="w-5 h-5 opacity-40 shrink-0" />
+                            <div className="flex-1 space-y-2">
+                              <div className="text-[10px] font-headline opacity-40 text-left">REVERB</div>
+                              <Slider defaultValue={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => audioEngine?.setReverb(v)} />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <Sliders className="w-5 h-5 opacity-40 shrink-0" />
+                            <div className="flex-1 space-y-2">
+                              <div className="text-[10px] font-headline opacity-40 text-left">DELAY</div>
+                              <Slider defaultValue={[0.3]} max={1} step={0.01} onValueChange={([v]) => audioEngine?.setDelay(v, 0.5)} />
+                            </div>
                           </div>
                         </div>
+
+                        <div className="flex items-center gap-6">
+                          <Activity className="w-5 h-5 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <div className="text-[10px] font-headline opacity-40 text-left">RESONANT FILTER</div>
+                            <Slider defaultValue={[20000]} max={20000} min={100} step={1} onValueChange={([v]) => audioEngine?.setFilter(v)} />
+                          </div>
+                        </div>
+                        
                         <div className="flex items-center gap-6">
                           <Activity className="w-5 h-5 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-2">
