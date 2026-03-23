@@ -1,14 +1,19 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { audioEngine } from '@/lib/audio-engine';
+import { cn } from '@/lib/utils';
 
 const NOTES = ["C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"];
 
 export function PianoRoll() {
+  const [activeNote, setActiveNote] = useState<string | null>(null);
+
   const handleNoteClick = (note: string) => {
+    setActiveNote(note);
     audioEngine?.triggerNote(note);
+    setTimeout(() => setActiveNote(null), 300);
   };
 
   return (
@@ -18,9 +23,19 @@ export function PianoRoll() {
           <button
             key={note}
             onClick={() => handleNoteClick(note)}
-            className="h-12 w-full flex items-center px-6 bg-white/40 hover:bg-[#ff4dff]/20 border-l-8 border-[#ff4dff] transition-all rounded-r-xl group"
+            className={cn(
+              "h-12 w-full flex items-center px-6 border-l-8 transition-all rounded-r-xl group",
+              activeNote === note 
+                ? "bg-[#ff4dff]/40 border-[#ff4dff] translate-x-2" 
+                : "bg-white/40 hover:bg-[#ff4dff]/20 border-[#ff4dff]"
+            )}
           >
-            <span className="text-sm font-headline text-black group-hover:scale-110 transition-transform">{note}</span>
+            <span className={cn(
+              "text-sm font-headline text-black transition-transform",
+              activeNote === note && "scale-110"
+            )}>
+              {note}
+            </span>
           </button>
         ))}
       </div>

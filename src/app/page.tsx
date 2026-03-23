@@ -1,20 +1,34 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatedText } from '@/components/animated-text';
 import { Mascot } from '@/components/mascot';
 import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart, Home } from 'lucide-react';
+import { Sparkles, Music, Waves, Heart, Home, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
 export default function BiotuneApp() {
   const [step, setStep] = useState<FlowStep>('intro');
+  const [bpm, setBpm] = useState(80);
+  const [loopNotes, setLoopNotes] = useState(8);
+  const [loopBars, setLoopBars] = useState(4);
+
+  // Poll BPM for live display updates
+  useEffect(() => {
+    if (step !== 'dashboard') return;
+    const interval = setInterval(() => {
+      if (audioEngine) {
+        setBpm(audioEngine.getBPM());
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [step]);
 
   const texts = [
     "Hi… let’s create magical music from you together 🎶",
@@ -39,6 +53,12 @@ export default function BiotuneApp() {
     setStep('intro');
   };
 
+  const updateLoop = (notes: number, bars: number) => {
+    setLoopNotes(notes);
+    setLoopBars(bars);
+    audioEngine?.updateLoop(notes, bars);
+  };
+
   return (
     <main className="relative min-h-svh w-full overflow-hidden">
       {/* 🌌 Background Layer */}
@@ -60,7 +80,7 @@ export default function BiotuneApp() {
       {/* ✨ Sparkles Layer */}
       <div className="fixed inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.3)_1px,_transparent_1px)] bg-[length:40px_40px] animate-sparkle-move pointer-events-none" />
 
-      {/* 🏠 Home Button (Dashboard only) */}
+      {/* 🏠 Home Button */}
       {step === 'dashboard' && (
         <button
           onClick={handleGoHome}
@@ -74,12 +94,10 @@ export default function BiotuneApp() {
       {/* 🎭 Main Content Container */}
       <div className="relative z-10 w-full h-svh flex flex-col items-center pt-[60px] px-6 text-center overflow-auto">
         
-        {/* Mascot is always visible in different states */}
         <div className="mb-10">
           <Mascot state={step === 'magic' || step === 'activation' ? 'reacting' : step === 'dashboard' ? 'active' : 'idle'} />
         </div>
 
-        {/* Step-specific UI */}
         <div className="w-full max-w-4xl flex flex-col items-center gap-8">
           {step === 'intro' && (
             <>
@@ -115,7 +133,6 @@ export default function BiotuneApp() {
 
           {step === 'dashboard' && (
             <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in fade-in zoom-in-95 duration-1000 pb-20">
-              {/* Left Column: Biometrics */}
               <div className="lg:col-span-4 flex flex-col items-center gap-6">
                 <div className="w-full p-8 bg-white/20 backdrop-blur-md rounded-3xl border border-white/40 shadow-xl">
                   <h3 className="text-black font-headline text-center mb-6 flex items-center justify-center gap-2">
@@ -126,21 +143,20 @@ export default function BiotuneApp() {
                 
                 <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm font-headline opacity-60">PULSE (BPM)</span>
+                    <span className="text-sm font-headline opacity-60 uppercase">PULSE (BPM)</span>
                     <span className="text-2xl font-headline text-[#ff4dff]">
-                      {audioEngine?.getBPM()?.toFixed(0)}
+                      {bpm.toFixed(0)}
                     </span>
                   </div>
                   <div className="h-2 bg-black/10 rounded-full overflow-hidden">
                      <div 
-                      className="h-full bg-[#ff4dff] transition-all duration-1000" 
-                      style={{ width: `${(audioEngine?.getBPM() || 80) / 2}%` }} 
+                      className="h-full bg-[#ff4dff] transition-all duration-500" 
+                      style={{ width: `${Math.min(100, (bpm / 200) * 100)}%` }} 
                      />
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: Instruments */}
               <div className="lg:col-span-8 flex flex-col gap-8">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-black font-headline">
@@ -164,12 +180,40 @@ export default function BiotuneApp() {
                     <p className="text-xs text-black/60 font-body">Adjust your magical sequence settings</p>
                   </div>
                   <div className="flex gap-8">
-                    <div className="text-center">
-                      <div className="text-2xl font-headline text-[#ff4dff]">8</div>
+                    <div className="text-center flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-2">
+                         <button 
+                           onClick={() => updateLoop(Math.max(1, loopNotes - 1), loopBars)}
+                           className="p-1 hover:text-[#ff4dff] transition-colors"
+                         >
+                           <Minus className="w-4 h-4" />
+                         </button>
+                         <div className="text-2xl font-headline text-[#ff4dff] min-w-[30px]">{loopNotes}</div>
+                         <button 
+                           onClick={() => updateLoop(Math.min(16, loopNotes + 1), loopBars)}
+                           className="p-1 hover:text-[#ff4dff] transition-colors"
+                         >
+                           <Plus className="w-4 h-4" />
+                         </button>
+                      </div>
                       <div className="text-[10px] opacity-60 uppercase font-headline">Notes</div>
                     </div>
-                    <div className="text-center border-l border-black/10 pl-8">
-                      <div className="text-2xl font-headline text-[#ff4dff]">4</div>
+                    <div className="text-center border-l border-black/10 pl-8 flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => updateLoop(loopNotes, Math.max(1, loopBars - 1))}
+                          className="p-1 hover:text-[#ff4dff] transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <div className="text-2xl font-headline text-[#ff4dff] min-w-[30px]">{loopBars}</div>
+                        <button 
+                          onClick={() => updateLoop(loopNotes, Math.min(16, loopBars + 1))}
+                          className="p-1 hover:text-[#ff4dff] transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                       <div className="text-[10px] opacity-60 uppercase font-headline">Bars</div>
                     </div>
                   </div>
