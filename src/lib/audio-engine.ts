@@ -62,7 +62,6 @@ class AudioEngine {
       baseUrl: "https://tonejs.github.io/audio/casio/",
       onload: () => { 
         this.isLoaded = true; 
-        console.log("Audio samples loaded successfully.");
       },
       onerror: (err) => {
         console.warn("Sampler failed to load, falling back to synth.", err);
@@ -105,6 +104,7 @@ class AudioEngine {
 
   public setChordMode(active: boolean) {
     this.chordMode = active;
+    this.saveSession();
   }
 
   public getChordMode() {
@@ -123,9 +123,14 @@ class AudioEngine {
         this.rootNote = saved.rootNote || "C";
         this.swingAmount = saved.swingAmount || 0;
         this.chordMode = !!saved.chordMode;
+        
+        if (saved.bpm) Tone.getTransport().bpm.value = saved.bpm;
+        
         this.setSwing(this.swingAmount);
         this.updateScale(this.rootNote);
         if (saved.reverbWet !== undefined) this.setReverb(saved.reverbWet);
+        if (saved.masterVolume !== undefined) this.setMasterVolume(saved.masterVolume);
+        
         return saved;
       } catch (e) { 
         return null;
@@ -142,7 +147,9 @@ class AudioEngine {
       rootNote: this.rootNote,
       reverbWet: this.reverb.wet.value,
       swingAmount: this.swingAmount,
-      chordMode: this.chordMode
+      chordMode: this.chordMode,
+      bpm: Tone.getTransport().bpm.value,
+      masterVolume: this.masterGain.gain.value
     };
   }
 
@@ -234,16 +241,19 @@ class AudioEngine {
     this.swingAmount = amount;
     Tone.getTransport().swing = amount;
     Tone.getTransport().swingSubdivision = "16n";
+    this.saveSession();
   }
   getSwing() { return this.swingAmount; }
 
   setReverb(wet: number) {
     this.reverb.wet.rampTo(wet, 0.5);
+    this.saveSession();
   }
   getReverb() { return this.reverb.wet.value; }
 
   setMasterVolume(val: number) {
     this.masterGain.gain.rampTo(val, 0.1);
+    this.saveSession();
   }
 
   updateScale(root: string) {
@@ -256,6 +266,7 @@ class AudioEngine {
       "G": ["G5", "E5", "D5", "C5", "B4", "A4", "G4", "D4"]
     };
     this.notes = scaleMap[root] || scaleMap["C"];
+    this.saveSession();
   }
 
   getNotes() { return this.notes; }
@@ -316,12 +327,13 @@ class AudioEngine {
     }
   }
 
-  triggerNote(note: string) {
+  triggerNote(index: number) {
     if (Tone.getContext().state !== 'running') Tone.getContext().resume();
-    this.triggerNoteAtTime(this.notes.indexOf(note), Tone.now());
+    this.triggerNoteAtTime(index, Tone.now());
   }
 
   private triggerNoteAtTime(rowIndex: number, time: any) {
+    if (rowIndex < 0 || rowIndex >= this.notes.length) return;
     const notesToPlay = [this.notes[rowIndex]];
     
     if (this.chordMode) {
@@ -341,9 +353,7 @@ class AudioEngine {
   }
 
   setAmbience(intensity: number) {
-    // Map intensity 0..1 to a more audible -24dB to 0dB range
-    const targetDb = Tone.gainToDb(Math.max(0.05, intensity * 0.95 + 0.05));
-    
+    const targetDb = Tone.gainToDb(Math.max(0.1, intensity * 0.9 + 0.1));
     this.synth.volume.rampTo(targetDb, 0.5);
     if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);
     if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);

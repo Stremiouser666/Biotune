@@ -44,6 +44,7 @@ export default function BiotuneApp() {
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
   const [chordMode, setChordMode] = useState(false);
   const [activeSlot, setActiveSlot] = useState('A');
+  const [accordionValue, setAccordionValue] = useState<string>("biometrics");
   const tapTimes = useRef<number[]>([]);
   const { toast } = useToast();
 
@@ -54,6 +55,23 @@ export default function BiotuneApp() {
         setTimeout(() => setIsPulsing(false), 150);
       };
       audioEngine.addOnDrumHit(handleHit);
+      
+      // Check for shared session in URL
+      const params = new URLSearchParams(window.location.search);
+      const sharedData = params.get('session');
+      if (sharedData) {
+        try {
+          const data = JSON.parse(atob(sharedData));
+          audioEngine.loadSession(data);
+          setRootNote(data.rootNote || "C");
+          setChordMode(!!data.chordMode);
+          setBpm(data.bpm || 80);
+          toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
+        } catch (e) {
+          console.error("Failed to parse shared session", e);
+        }
+      }
+
       return () => audioEngine.removeOnDrumHit(handleHit);
     }
   }, []);
@@ -73,8 +91,16 @@ export default function BiotuneApp() {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
     if (step === 'dashboard' && isFirstTime) {
       setOnboardingStep(0);
+      setAccordionValue("biometrics");
     }
   }, [step]);
+
+  // Sync accordion with onboarding steps
+  useEffect(() => {
+    if (onboardingStep === 0) setAccordionValue("biometrics");
+    else if (onboardingStep === 1) setAccordionValue("melody");
+    else if (onboardingStep === 2) setAccordionValue("rhythm");
+  }, [onboardingStep]);
 
   const handleCreateSound = async () => {
     await audioEngine?.start();
@@ -128,7 +154,7 @@ export default function BiotuneApp() {
     if (data) {
       setSessionVersion(v => v + 1);
       setRootNote(data.rootNote || "C");
-      setBpm(audioEngine?.getBPM() || 80);
+      setBpm(data.bpm || audioEngine?.getBPM() || 80);
       setChordMode(!!data.chordMode);
       toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
     } else {
@@ -145,19 +171,18 @@ export default function BiotuneApp() {
   const handleSwitchSlot = (slot: string) => {
     setActiveSlot(slot);
     audioEngine?.setSlot(slot);
-    // Auto-load slot when switched
     const data = audioEngine?.loadSession();
     if (data) {
       setSessionVersion(v => v + 1);
       setRootNote(data.rootNote || "C");
       setChordMode(!!data.chordMode);
+      setBpm(data.bpm || 80);
     }
   };
 
   const handleToggleChordMode = (val: boolean) => {
     setChordMode(val);
     audioEngine?.setChordMode(val);
-    audioEngine?.saveSession();
   };
 
   const handleTapTempo = () => {
@@ -178,9 +203,9 @@ export default function BiotuneApp() {
   const handleShare = () => {
     const data = audioEngine?.getSessionData();
     const encoded = btoa(JSON.stringify(data));
-    const url = `${window.location.origin}?session=${encoded}`;
+    const url = `${window.location.origin}${window.location.pathname}?session=${encoded}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link Copied!", description: "Share this link with someone to show your creation." });
+    toast({ title: "Link Enrolled!", description: "Share this link with someone to show your creation." });
   };
 
   const finishOnboarding = () => {
@@ -247,7 +272,13 @@ export default function BiotuneApp() {
 
           {step === 'dashboard' && (
             <div className="w-full animate-scroll-open space-y-4">
-              <Accordion type="single" collapsible defaultValue="biometrics" className="w-full space-y-4">
+              <Accordion 
+                type="single" 
+                collapsible 
+                value={accordionValue} 
+                onValueChange={setAccordionValue}
+                className="w-full space-y-4"
+              >
                 <AccordionItem value="biometrics" className={cn("border-none transition-all", onboardingStep === 0 && "ring-4 ring-primary ring-offset-4 rounded-2xl")}>
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Activity className="w-5 h-5 text-primary" /><span className="font-headline text-black">BIOMETRIC SYNC</span></div>

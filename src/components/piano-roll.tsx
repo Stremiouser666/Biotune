@@ -30,8 +30,7 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
     audioEngine?.toggleMelody(row, col);
     setGrid([...audioEngine!.getMelodyGrid().map(r => [...r])]);
     if (!grid[row][col]) {
-      const activeNotes = audioEngine?.getNotes() || [];
-      audioEngine?.triggerNote(activeNotes[row]);
+      audioEngine?.triggerNote(row);
     }
   };
 

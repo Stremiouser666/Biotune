@@ -1,6 +1,7 @@
 
 import type {Metadata, Viewport} from 'next';
 import './globals.css';
+import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
   title: 'Biotune — Magical Biometric Music',
@@ -38,7 +39,10 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Frijole&display=swap" rel="stylesheet" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="font-body antialiased select-none touch-none overflow-hidden">{children}</body>
+      <body className="font-body antialiased select-none touch-none overflow-hidden">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }
