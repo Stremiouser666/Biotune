@@ -107,11 +107,26 @@ export default function BiotuneApp() {
       {/* 🌌 Background Layer */}
       <div 
         className={cn(
-          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2500ms] cubic-bezier(0.23, 1, 0.32, 1)",
-          step === 'intro' ? "opacity-40 blur-[8px] scale-100" : "opacity-100 blur-0 scale-105",
+          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2500ms] cubic-bezier(0.23, 1, 0.32, 1) animate-wavy",
+          step === 'intro' ? "opacity-40 blur-[8px]" : "opacity-100 blur-0",
           isPulsing && "animate-bg-pulse"
         )} 
       />
+
+      {/* 🌊 Magical Wave Layers */}
+      <div className="waves-layer">
+        <svg className="w-full h-full" viewBox="0 24 150 28" preserveAspectRatio="none" shapeRendering="auto">
+          <defs>
+            <path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+          </defs>
+          <g className="parallax">
+            <use href="#gentle-wave" x="48" y="0" fill="rgba(255,255,255,0.7)" />
+            <use href="#gentle-wave" x="48" y="3" fill="rgba(255,255,255,0.5)" />
+            <use href="#gentle-wave" x="48" y="5" fill="rgba(255,255,255,0.3)" />
+            <use href="#gentle-wave" x="48" y="7" fill="rgba(255,255,255,1)" />
+          </g>
+        </svg>
+      </div>
 
       {/* 🌑 Subtle Atmosphere Overlay */}
       <div 
