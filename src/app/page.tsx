@@ -7,8 +7,8 @@ import { Mascot } from '@/components/mascot';
 import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
-import { audioEngine } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart, Home, Plus, Minus } from 'lucide-react';
+import { audioEngine, type AudioMode } from '@/lib/audio-engine';
+import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
@@ -18,13 +18,15 @@ export default function BiotuneApp() {
   const [bpm, setBpm] = useState(80);
   const [loopNotes, setLoopNotes] = useState(8);
   const [loopBars, setLoopBars] = useState(4);
+  const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
 
-  // Poll BPM for live display updates
+  // Poll BPM and Mode for live display updates
   useEffect(() => {
     if (step !== 'dashboard') return;
     const interval = setInterval(() => {
       if (audioEngine) {
         setBpm(audioEngine.getBPM());
+        setAudioMode(audioEngine.getMode());
       }
     }, 500);
     return () => clearInterval(interval);
@@ -57,6 +59,12 @@ export default function BiotuneApp() {
     setLoopNotes(notes);
     setLoopBars(bars);
     audioEngine?.updateLoop(notes, bars);
+  };
+
+  const toggleAudioMode = () => {
+    const newMode = audioMode === 'synth' ? 'sampled' : 'synth';
+    setAudioMode(newMode);
+    audioEngine?.setMode(newMode);
   };
 
   return (
@@ -154,6 +162,19 @@ export default function BiotuneApp() {
                       style={{ width: `${Math.min(100, (bpm / 200) * 100)}%` }} 
                      />
                   </div>
+                </div>
+
+                <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Layers className="w-5 h-5 text-[#ff4dff]" />
+                    <span className="text-sm font-headline uppercase opacity-60">Sound Palette</span>
+                  </div>
+                  <button 
+                    onClick={toggleAudioMode}
+                    className="px-4 py-2 bg-[#ff4dff] text-white rounded-xl font-headline text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
+                  >
+                    {audioMode === 'synth' ? 'SYNTHETIC' : 'MAGICAL SAMPLES'}
+                  </button>
                 </div>
               </div>
 
