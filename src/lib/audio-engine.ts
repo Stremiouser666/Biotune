@@ -3,7 +3,7 @@
 
 import * as Tone from "tone";
 
-export type AudioMode = 'synth' | 'sampled';
+export type AudioMode = 'synth' | 'sampled' | 'custom';
 
 class AudioEngine {
   private synth: Tone.PolySynth;
@@ -11,6 +11,9 @@ class AudioEngine {
   
   private pianoSampler: Tone.Sampler | null = null;
   private drumPlayers: Tone.Players | null = null;
+  
+  private customPianoSampler: Tone.Sampler | null = null;
+  private customDrumPlayers: Tone.Players | null = null;
   
   private isStarted = false;
   private isLoaded = false;
@@ -89,6 +92,7 @@ class AudioEngine {
       Tone.getTransport().stop();
       this.synth.releaseAll();
       if (this.pianoSampler) this.pianoSampler.releaseAll();
+      if (this.customPianoSampler) this.customPianoSampler.releaseAll();
     }
   }
 
@@ -96,6 +100,7 @@ class AudioEngine {
     this.mode = mode;
     this.synth.releaseAll();
     if (this.pianoSampler) this.pianoSampler.releaseAll();
+    if (this.customPianoSampler) this.customPianoSampler.releaseAll();
   }
 
   getMode(): AudioMode {
@@ -111,10 +116,30 @@ class AudioEngine {
     return Tone.getTransport().bpm.value;
   }
 
+  setCustomPiano(url: string) {
+    if (this.customPianoSampler) this.customPianoSampler.dispose();
+    this.customPianoSampler = new Tone.Sampler({
+      urls: { "C4": url },
+      onload: () => console.log("Custom Piano Loaded")
+    }).toDestination();
+  }
+
+  setCustomDrums(type: 'kick' | 'snare' | 'hat', url: string) {
+    if (!this.customDrumPlayers) {
+      this.customDrumPlayers = new Tone.Players().toDestination();
+    }
+    this.customDrumPlayers.add(type, url);
+  }
+
   triggerDrum(type: 'soft' | 'hard' | 'roll') {
     if (!this.isStarted) return;
 
-    if (this.mode === 'sampled' && this.drumPlayers) {
+    if (this.mode === 'custom' && this.customDrumPlayers) {
+      const p = this.customDrumPlayers;
+      if (type === 'hard' && p.has("kick")) p.player("kick").start();
+      if (type === 'soft' && p.has("snare")) p.player("snare").start();
+      if (type === 'roll' && p.has("hat")) p.player("hat").start();
+    } else if (this.mode === 'sampled' && this.drumPlayers) {
       const p = this.drumPlayers;
       if (type === 'hard') p.player("kick").start();
       if (type === 'soft') p.player("snare").start();
@@ -140,7 +165,9 @@ class AudioEngine {
   }
 
   private triggerNoteAtTime(note: string, time: any) {
-    if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
+    if (this.mode === 'custom' && this.customPianoSampler) {
+       this.customPianoSampler.triggerAttackRelease(note, "4n", time);
+    } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
       this.pianoSampler.triggerAttackRelease(note, "4n", time);
     } else {
       this.synth.triggerAttackRelease(note, "4n", time);
@@ -152,6 +179,7 @@ class AudioEngine {
     const targetDb = Math.max(-30, db - 10);
     this.synth.volume.rampTo(targetDb, 0.5);
     if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);
+    if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);
   }
 
   updateLoop(notesCount: number, barsCount: number) {

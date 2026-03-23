@@ -8,8 +8,16 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers } from 'lucide-react';
+import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers, Upload, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
@@ -19,6 +27,7 @@ export default function BiotuneApp() {
   const [loopNotes, setLoopNotes] = useState(8);
   const [loopBars, setLoopBars] = useState(4);
   const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
+  const [customFiles, setCustomFiles] = useState<{ [key: string]: string }>({});
 
   // Poll BPM and Mode for live display updates
   useEffect(() => {
@@ -61,10 +70,26 @@ export default function BiotuneApp() {
     audioEngine?.updateLoop(notes, bars);
   };
 
-  const toggleAudioMode = () => {
-    const newMode = audioMode === 'synth' ? 'sampled' : 'synth';
+  const toggleAudioMode = (mode?: AudioMode) => {
+    const nextModes: AudioMode[] = ['synth', 'sampled', 'custom'];
+    const currentIndex = nextModes.indexOf(audioMode);
+    const newMode = mode || nextModes[(currentIndex + 1) % nextModes.length];
     setAudioMode(newMode);
     audioEngine?.setMode(newMode);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setCustomFiles(prev => ({ ...prev, [type]: file.name }));
+
+    if (type === 'piano') {
+      audioEngine?.setCustomPiano(url);
+    } else {
+      audioEngine?.setCustomDrums(type as any, url);
+    }
   };
 
   return (
@@ -140,7 +165,7 @@ export default function BiotuneApp() {
           )}
 
           {step === 'dashboard' && (
-            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in fade-in zoom-in-95 duration-1000 pb-20">
+            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in fade-in zoom-in-95 duration-1000 pb-20 text-black">
               <div className="lg:col-span-4 flex flex-col items-center gap-6">
                 <div className="w-full p-8 bg-white/20 backdrop-blur-md rounded-3xl border border-white/40 shadow-xl">
                   <h3 className="text-black font-headline text-center mb-6 flex items-center justify-center gap-2">
@@ -164,17 +189,69 @@ export default function BiotuneApp() {
                   </div>
                 </div>
 
-                <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Layers className="w-5 h-5 text-[#ff4dff]" />
-                    <span className="text-sm font-headline uppercase opacity-60">Sound Palette</span>
+                <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Layers className="w-5 h-5 text-[#ff4dff]" />
+                      <span className="text-sm font-headline uppercase opacity-60">Palette</span>
+                    </div>
+                    <button 
+                      onClick={() => toggleAudioMode()}
+                      className="px-4 py-2 bg-[#ff4dff] text-white rounded-xl font-headline text-[10px] shadow-md hover:scale-105 active:scale-95 transition-all"
+                    >
+                      {audioMode === 'synth' ? 'SYNTHETIC' : audioMode === 'sampled' ? 'MAGICAL SAMPLES' : 'PERSONALIZED'}
+                    </button>
                   </div>
-                  <button 
-                    onClick={toggleAudioMode}
-                    className="px-4 py-2 bg-[#ff4dff] text-white rounded-xl font-headline text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
-                  >
-                    {audioMode === 'synth' ? 'SYNTHETIC' : 'MAGICAL SAMPLES'}
-                  </button>
+
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="w-full flex items-center justify-center gap-2 py-3 bg-white/40 border border-[#ff4dff]/40 rounded-xl font-headline text-xs hover:bg-white/60 transition-colors">
+                        <Wand2 className="w-4 h-4 text-[#ff4dff]" />
+                        CUSTOMIZE SOUNDS
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="font-frijole bg-white/90 backdrop-blur-xl border-[#ff4dff]/40">
+                      <DialogHeader>
+                        <DialogTitle className="text-2xl text-[#ff4dff]">MAGIC SAMPLE IMPORTER</DialogTitle>
+                        <DialogDescription className="text-black/60">Upload your own magical audio files to use in personalized mode.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        {[
+                          { id: 'piano', label: 'Piano Sample', icon: Music },
+                          { id: 'kick', label: 'Kick Drum', icon: Heart },
+                          { id: 'snare', label: 'Snare Drum', icon: Waves },
+                          { id: 'hat', label: 'Hi-Hat', icon: Sparkles },
+                        ].map((item) => (
+                          <div key={item.id} className="flex items-center justify-between bg-black/5 p-3 rounded-xl border border-black/5">
+                            <div className="flex items-center gap-3">
+                              <item.icon className="w-4 h-4 text-[#ff4dff]" />
+                              <div>
+                                <p className="text-sm font-headline">{item.label}</p>
+                                <p className="text-[10px] opacity-60 truncate max-w-[150px]">
+                                  {customFiles[item.id] || 'No file selected'}
+                                </p>
+                              </div>
+                            </div>
+                            <label className="cursor-pointer bg-[#ff4dff] p-2 rounded-lg hover:scale-105 transition-transform">
+                              <Upload className="w-4 h-4 text-white" />
+                              <input 
+                                type="file" 
+                                className="hidden" 
+                                accept="audio/*" 
+                                onChange={(e) => handleFileUpload(e, item.id)}
+                              />
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <button 
+                        onClick={() => toggleAudioMode('custom')}
+                        className="w-full py-4 bg-[#ff4dff] text-white rounded-2xl font-headline shadow-lg"
+                      >
+                        ACTIVATE PERSONALIZED SOUNDS
+                      </button>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
 
@@ -197,7 +274,7 @@ export default function BiotuneApp() {
 
                 <div className="p-6 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex items-center justify-between shadow-md">
                   <div>
-                    <h4 className="font-headline text-black text-lg">Loop Engine</h4>
+                    <h4 className="font-headline text-black text-lg text-left">Loop Engine</h4>
                     <p className="text-xs text-black/60 font-body">Adjust your magical sequence settings</p>
                   </div>
                   <div className="flex gap-8">
