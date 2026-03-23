@@ -7,8 +7,9 @@ import { Mascot } from '@/components/mascot';
 import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
+import { FullscreenVisualizer } from '@/components/fullscreen-visualizer';
 import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +34,7 @@ type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
 export default function BiotuneApp() {
   const [step, setStep] = useState<FlowStep>('intro');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [bpm, setBpm] = useState(80);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -81,7 +83,7 @@ export default function BiotuneApp() {
       }
 
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.code === 'Space' && step === 'dashboard') {
+        if (e.code === 'Space' && step === 'dashboard' && !isFullscreen) {
           e.preventDefault();
           handleTapTempo();
         }
@@ -93,7 +95,7 @@ export default function BiotuneApp() {
         window.removeEventListener('keydown', handleKeyDown);
       };
     }
-  }, [step]);
+  }, [step, isFullscreen]);
 
   useEffect(() => {
     if (step !== 'dashboard') return;
@@ -151,6 +153,7 @@ export default function BiotuneApp() {
     audioEngine?.stop();
     setIsPlaying(false);
     setStep('intro');
+    setIsFullscreen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
@@ -258,8 +261,22 @@ export default function BiotuneApp() {
       />
       <div className="fixed inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.3)_1px,_transparent_1px)] bg-[length:40px_40px] animate-sparkle-move pointer-events-none" />
 
-      {step === 'dashboard' && (
+      {isFullscreen && (
+        <FullscreenVisualizer 
+          onClose={() => setIsFullscreen(false)} 
+          breathingIntensity={breathingIntensity} 
+        />
+      )}
+
+      {step === 'dashboard' && !isFullscreen && (
         <div className="fixed top-6 right-6 flex gap-2 z-50">
+          <button 
+            onClick={() => setIsFullscreen(true)} 
+            className="p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all"
+            title="Visualizer Mode"
+          >
+            <Maximize2 className="w-6 h-6 text-primary" />
+          </button>
           <button onClick={handleShare} className="p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all">
             <Share2 className="w-6 h-6 text-primary" />
           </button>
