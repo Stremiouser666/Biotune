@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -44,7 +43,7 @@ export function BiometricMonitor() {
       // Start real-time analysis
       analyzeMic();
       
-      // Start AI polling for musical influence
+      // Start local polling for musical influence
       startAiPolling();
 
     } catch (err: any) {
@@ -90,7 +89,7 @@ export function BiometricMonitor() {
   const startAiPolling = () => {
     if (aiIntervalRef.current) clearInterval(aiIntervalRef.current);
     
-    // Polling every 10 seconds to respect API rate limits (approx 6 requests per minute)
+    // Polling every 2 seconds for a responsive local mapping
     aiIntervalRef.current = setInterval(async () => {
       const currentBreathing = breathing;
       const currentMovement = movement;
@@ -101,7 +100,7 @@ export function BiometricMonitor() {
           movementIntensity: currentMovement
         });
         
-        // Apply AI suggestions to audio engine
+        // Apply suggestions to audio engine
         if (influence.tempoInfluence !== 0) {
           const currentBpm = audioEngine?.getBPM() || 80;
           audioEngine?.setBPM(currentBpm + influence.tempoInfluence * 15);
@@ -112,10 +111,10 @@ export function BiometricMonitor() {
         }
         
       } catch (e) {
-        // Log error but don't crash; polling continues
-        console.warn("AI Music Influence Rate Limit or Error:", e);
+        // Log error but don't crash
+        console.warn("Music Influence Error:", e);
       }
-    }, 10000);
+    }, 2000);
   };
 
   useEffect(() => {
