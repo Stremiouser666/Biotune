@@ -7,7 +7,7 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers, Upload, Wand2 } from 'lucide-react';
+import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers, Upload, Wand2, Activity, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -17,6 +17,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
@@ -136,13 +142,13 @@ export default function BiotuneApp() {
       )}
 
       {/* 🎭 Main Content Container */}
-      <div className="relative z-10 w-full h-svh flex flex-col items-center pt-[60px] px-6 text-center overflow-auto">
+      <div className="relative z-10 w-full h-svh flex flex-col items-center pt-[60px] px-6 text-center overflow-auto scrollbar-hide">
         
-        <div className="mb-10">
+        <div className="mb-10 shrink-0">
           <Mascot state={step === 'magic' || step === 'activation' ? 'reacting' : step === 'dashboard' ? 'active' : 'idle'} />
         </div>
 
-        <div className="w-full max-w-4xl flex flex-col items-center gap-8">
+        <div className="w-full max-w-4xl flex flex-col items-center gap-8 pb-20">
           {step === 'intro' && (
             <>
               <AnimatedText 
@@ -176,158 +182,196 @@ export default function BiotuneApp() {
           )}
 
           {step === 'dashboard' && (
-            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-scroll-open pb-20 text-black">
-              <div className="lg:col-span-4 flex flex-col items-center gap-6">
-                <div className="w-full p-8 bg-white/20 backdrop-blur-md rounded-3xl border border-white/40 shadow-xl">
-                  <h3 className="text-black font-headline text-center mb-6 flex items-center justify-center gap-2">
-                    <Heart className="w-5 h-5 text-[#ff4dff]" /> BIOMETRIC SYNC
-                  </h3>
-                  <BiometricMonitor />
-                </div>
+            <div className="w-full animate-scroll-open">
+              <Accordion type="single" collapsible defaultValue="biometrics" className="w-full space-y-4">
                 
-                <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-sm font-headline opacity-60 uppercase">PULSE (BPM)</span>
-                    <span className="text-2xl font-headline text-[#ff4dff]">
-                      {bpm.toFixed(0)}
-                    </span>
-                  </div>
-                  <div className="h-2 bg-black/10 rounded-full overflow-hidden">
-                     <div 
-                      className="h-full bg-[#ff4dff] transition-all duration-500" 
-                      style={{ width: `${Math.min(100, (bpm / 200) * 100)}%` }} 
-                     />
-                  </div>
-                </div>
+                {/* 🧬 Biometric Sync Section */}
+                <AccordionItem value="biometrics" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline hover:bg-white/60 transition-all group">
+                    <div className="flex items-center gap-3">
+                      <Activity className="w-5 h-5 text-[#ff4dff]" />
+                      <span className="font-headline text-black text-left">BIOMETRIC SYNC</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-6 bg-white/20 backdrop-blur-sm rounded-2xl border border-white/40">
+                         <BiometricMonitor />
+                      </div>
+                      <div className="p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg flex flex-col justify-center">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-sm font-headline opacity-60 uppercase text-black">PULSE (BPM)</span>
+                          <span className="text-2xl font-headline text-[#ff4dff]">
+                            {bpm.toFixed(0)}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-black/10 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-[#ff4dff] transition-all duration-500" 
+                            style={{ width: `${Math.min(100, (bpm / 200) * 100)}%` }} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
 
-                <div className="w-full p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg space-y-4">
-                  <div className="flex items-center justify-between">
+                {/* 🎨 Sound Palette Section */}
+                <AccordionItem value="palette" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline hover:bg-white/60 transition-all">
                     <div className="flex items-center gap-3">
                       <Layers className="w-5 h-5 text-[#ff4dff]" />
-                      <span className="text-sm font-headline uppercase opacity-60">Palette</span>
+                      <span className="font-headline text-black text-left">SOUND PALETTE</span>
                     </div>
-                    <button 
-                      onClick={() => toggleAudioMode()}
-                      className="px-4 py-2 bg-[#ff4dff] text-white rounded-xl font-headline text-[10px] shadow-md hover:scale-105 active:scale-95 transition-all"
-                    >
-                      {audioMode === 'synth' ? 'SYNTHETIC' : audioMode === 'sampled' ? 'MAGICAL SAMPLES' : 'PERSONALIZED'}
-                    </button>
-                  </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <div className="p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-headline uppercase opacity-60 text-black">CURRENT MODE</span>
+                        <button 
+                          onClick={() => toggleAudioMode()}
+                          className="px-6 py-2 bg-[#ff4dff] text-white rounded-xl font-headline text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
+                        >
+                          {audioMode === 'synth' ? 'SYNTHETIC' : audioMode === 'sampled' ? 'MAGICAL SAMPLES' : 'PERSONALIZED'}
+                        </button>
+                      </div>
 
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <button className="w-full flex items-center justify-center gap-2 py-3 bg-white/40 border border-[#ff4dff]/40 rounded-xl font-headline text-xs hover:bg-white/60 transition-colors">
-                        <Wand2 className="w-4 h-4 text-[#ff4dff]" />
-                        CUSTOMIZE SOUNDS
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="font-headline bg-white/90 backdrop-blur-xl border-[#ff4dff]/40">
-                      <DialogHeader>
-                        <DialogTitle className="text-2xl text-[#ff4dff]">MAGIC SAMPLE IMPORTER</DialogTitle>
-                        <DialogDescription className="text-black/60">Upload your own magical audio files to use in personalized mode.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        {[
-                          { id: 'piano', label: 'Piano Sample', icon: Music },
-                          { id: 'kick', label: 'Kick Drum', icon: Heart },
-                          { id: 'snare', label: 'Snare Drum', icon: Waves },
-                          { id: 'hat', label: 'Hi-Hat', icon: Sparkles },
-                        ].map((item) => (
-                          <div key={item.id} className="flex items-center justify-between bg-black/5 p-3 rounded-xl border border-black/5">
-                            <div className="flex items-center gap-3">
-                              <item.icon className="w-4 h-4 text-[#ff4dff]" />
-                              <div>
-                                <p className="text-sm font-headline">{item.label}</p>
-                                <p className="text-[10px] opacity-60 truncate max-w-[150px]">
-                                  {customFiles[item.id] || 'No file selected'}
-                                </p>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button className="w-full flex items-center justify-center gap-2 py-4 bg-white/40 border border-[#ff4dff]/40 rounded-xl font-headline text-sm text-black hover:bg-white/60 transition-colors">
+                            <Wand2 className="w-5 h-5 text-[#ff4dff]" />
+                            CUSTOMIZE SAMPLES
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="font-headline bg-white/95 backdrop-blur-xl border-[#ff4dff]/40">
+                          <DialogHeader>
+                            <DialogTitle className="text-2xl text-[#ff4dff]">MAGIC SAMPLE IMPORTER</DialogTitle>
+                            <DialogDescription className="text-black/60">Upload your own magical audio files for personalized mode.</DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            {[
+                              { id: 'piano', label: 'Piano Sample', icon: Music },
+                              { id: 'kick', label: 'Kick Drum', icon: Heart },
+                              { id: 'snare', label: 'Snare Drum', icon: Waves },
+                              { id: 'hat', label: 'Hi-Hat', icon: Sparkles },
+                            ].map((item) => (
+                              <div key={item.id} className="flex items-center justify-between bg-black/5 p-3 rounded-xl border border-black/5">
+                                <div className="flex items-center gap-3">
+                                  <item.icon className="w-4 h-4 text-[#ff4dff]" />
+                                  <div className="text-left">
+                                    <p className="text-sm font-headline text-black">{item.label}</p>
+                                    <p className="text-[10px] opacity-60 truncate max-w-[150px] text-black">
+                                      {customFiles[item.id] || 'No file selected'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <label className="cursor-pointer bg-[#ff4dff] p-2 rounded-lg hover:scale-105 transition-transform">
+                                  <Upload className="w-4 h-4 text-white" />
+                                  <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="audio/*" 
+                                    onChange={(e) => handleFileUpload(e, item.id)}
+                                  />
+                                </label>
                               </div>
-                            </div>
-                            <label className="cursor-pointer bg-[#ff4dff] p-2 rounded-lg hover:scale-105 transition-transform">
-                              <Upload className="w-4 h-4 text-white" />
-                              <input 
-                                type="file" 
-                                className="hidden" 
-                                accept="audio/*" 
-                                onChange={(e) => handleFileUpload(e, item.id)}
-                              />
-                            </label>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <button 
-                        onClick={() => toggleAudioMode('custom')}
-                        className="w-full py-4 bg-[#ff4dff] text-white rounded-2xl font-headline shadow-lg"
-                      >
-                        ACTIVATE PERSONALIZED SOUNDS
-                      </button>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
-
-              <div className="lg:col-span-8 flex flex-col gap-8">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-black font-headline">
-                    <Music className="w-6 h-6 text-[#ff4dff]" />
-                    PIANO ROLL
-                  </div>
-                  <PianoRoll />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-black font-headline">
-                    <Sparkles className="w-6 h-6 text-[#ff4dff]" />
-                    RHYTHM PADS
-                  </div>
-                  <DrumPads />
-                </div>
-
-                <div className="p-6 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex items-center justify-between shadow-md">
-                  <div>
-                    <h4 className="font-headline text-black text-lg text-left">Loop Engine</h4>
-                    <p className="text-xs text-black/60 font-body">Adjust your magical sequence settings</p>
-                  </div>
-                  <div className="flex gap-8">
-                    <div className="text-center flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-2">
-                         <button 
-                           onClick={() => updateLoop(Math.max(1, loopNotes - 1), loopBars)}
-                           className="p-1 hover:text-[#ff4dff] transition-colors"
-                         >
-                           <Minus className="w-4 h-4" />
-                         </button>
-                         <div className="text-2xl font-headline text-[#ff4dff] min-w-[30px]">{loopNotes}</div>
-                         <button 
-                           onClick={() => updateLoop(Math.min(16, loopNotes + 1), loopBars)}
-                           className="p-1 hover:text-[#ff4dff] transition-colors"
-                         >
-                           <Plus className="w-4 h-4" />
-                         </button>
-                      </div>
-                      <div className="text-[10px] opacity-60 uppercase font-headline">Notes</div>
+                          <button 
+                            onClick={() => toggleAudioMode('custom')}
+                            className="w-full py-4 bg-[#ff4dff] text-white rounded-2xl font-headline shadow-lg"
+                          >
+                            ACTIVATE PERSONALIZED SOUNDS
+                          </button>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                    <div className="text-center border-l border-black/10 pl-8 flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => updateLoop(loopNotes, Math.max(1, loopBars - 1))}
-                          className="p-1 hover:text-[#ff4dff] transition-colors"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <div className="text-2xl font-headline text-[#ff4dff] min-w-[30px]">{loopBars}</div>
-                        <button 
-                          onClick={() => updateLoop(loopNotes, Math.min(16, loopBars + 1))}
-                          className="p-1 hover:text-[#ff4dff] transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="text-[10px] opacity-60 uppercase font-headline">Bars</div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* 🎹 Melody Studio Section */}
+                <AccordionItem value="melody" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline hover:bg-white/60 transition-all">
+                    <div className="flex items-center gap-3">
+                      <Music className="w-5 h-5 text-[#ff4dff]" />
+                      <span className="font-headline text-black text-left">MELODY STUDIO</span>
                     </div>
-                  </div>
-                </div>
-              </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <PianoRoll />
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* 🥁 Rhythm Studio Section */}
+                <AccordionItem value="rhythm" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline hover:bg-white/60 transition-all">
+                    <div className="flex items-center gap-3">
+                      <Sparkles className="w-5 h-5 text-[#ff4dff]" />
+                      <span className="font-headline text-black text-left">RHYTHM STUDIO</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <DrumPads />
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* ⚙️ Loop Engine Section */}
+                <AccordionItem value="engine" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline hover:bg-white/60 transition-all">
+                    <div className="flex items-center gap-3">
+                      <Settings2 className="w-5 h-5 text-[#ff4dff]" />
+                      <span className="font-headline text-black text-left">LOOP ENGINE</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <div className="p-8 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex flex-col md:flex-row items-center justify-between shadow-md gap-6">
+                      <div className="text-center md:text-left">
+                        <h4 className="font-headline text-black text-lg">Magical Sequence</h4>
+                        <p className="text-xs text-black/60 font-body">Refine your musical architecture</p>
+                      </div>
+                      <div className="flex gap-12">
+                        <div className="text-center flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => updateLoop(Math.max(1, loopNotes - 1), loopBars)}
+                              className="p-2 bg-black/5 rounded-full hover:text-[#ff4dff] transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <div className="text-3xl font-headline text-[#ff4dff] min-w-[40px]">{loopNotes}</div>
+                            <button 
+                              onClick={() => updateLoop(Math.min(16, loopNotes + 1), loopBars)}
+                              className="p-2 bg-black/5 rounded-full hover:text-[#ff4dff] transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="text-[10px] opacity-60 uppercase font-headline text-black">Notes per Bar</div>
+                        </div>
+                        <div className="text-center border-l border-black/10 pl-12 flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => updateLoop(loopNotes, Math.max(1, loopBars - 1))}
+                              className="p-2 bg-black/5 rounded-full hover:text-[#ff4dff] transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <div className="text-3xl font-headline text-[#ff4dff] min-w-[40px]">{loopBars}</div>
+                            <button 
+                              onClick={() => updateLoop(loopNotes, Math.min(16, loopBars + 1))}
+                              className="p-2 bg-black/5 rounded-full hover:text-[#ff4dff] transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="text-[10px] opacity-60 uppercase font-headline text-black">Loop Length (Bars)</div>
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+              </Accordion>
             </div>
           )}
         </div>
