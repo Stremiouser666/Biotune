@@ -40,11 +40,10 @@ class AudioEngine {
   private onDrumHitListeners: Set<() => void> = new Set();
 
   constructor() {
-    this.reverb = new Tone.Reverb({ decay: 2, wet: 0.2 }).toDestination();
+    this.reverb = new Tone.Reverb({ decay: 2.5, wet: 0.25 }).toDestination();
     this.masterGain = new Tone.Gain(1).connect(this.reverb);
     this.recorder = new Tone.Recorder();
     
-    // Connect everything to the recorder
     this.reverb.connect(this.recorder);
 
     this.synth = new Tone.PolySynth(Tone.Synth).connect(this.masterGain);
@@ -52,7 +51,7 @@ class AudioEngine {
     
     this.synth.set({
       oscillator: { type: "triangle" },
-      envelope: { attack: 0.1, release: 1, decay: 0.2, sustain: 0.5 }
+      envelope: { attack: 0.1, release: 1.2, decay: 0.3, sustain: 0.4 }
     });
 
     this.pianoSampler = new Tone.Sampler({
@@ -61,7 +60,14 @@ class AudioEngine {
         "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3",
       },
       baseUrl: "https://tonejs.github.io/audio/casio/",
-      onload: () => { this.isLoaded = true; }
+      onload: () => { 
+        this.isLoaded = true; 
+        console.log("Audio samples loaded successfully.");
+      },
+      onerror: (err) => {
+        console.warn("Sampler failed to load, falling back to synth.", err);
+        this.isLoaded = false;
+      }
     }).connect(this.masterGain);
 
     this.drumPlayers = new Tone.Players({
@@ -160,11 +166,16 @@ class AudioEngine {
   removeOnDrumHit(callback: () => void) { this.onDrumHitListeners.delete(callback); }
 
   async start() {
+    if (Tone.getContext().state !== 'running') {
+      await Tone.start();
+      await Tone.getContext().resume();
+    }
+    
     if (this.isStarted) {
       Tone.getTransport().start();
       return;
     }
-    await Tone.start();
+
     Tone.getTransport().bpm.value = 80;
     this.isStarted = true;
     this.setupSequencer();
@@ -173,7 +184,10 @@ class AudioEngine {
 
   togglePlay() {
     if (Tone.getTransport().state === 'started') Tone.getTransport().pause();
-    else Tone.getTransport().start();
+    else {
+      if (Tone.getContext().state !== 'running') Tone.getContext().resume();
+      Tone.getTransport().start();
+    }
   }
 
   private setupSequencer() {
@@ -303,7 +317,7 @@ class AudioEngine {
   }
 
   triggerNote(note: string) {
-    // Simple wrapper for live UI taps
+    if (Tone.getContext().state !== 'running') Tone.getContext().resume();
     this.triggerNoteAtTime(this.notes.indexOf(note), Tone.now());
   }
 
@@ -311,7 +325,6 @@ class AudioEngine {
     const notesToPlay = [this.notes[rowIndex]];
     
     if (this.chordMode) {
-      // Add the "3rd" and "5th" from the scale array if within bounds
       if (rowIndex + 2 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 2]);
       if (rowIndex + 4 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 4]);
     }
@@ -328,7 +341,9 @@ class AudioEngine {
   }
 
   setAmbience(intensity: number) {
-    const targetDb = Math.max(-40, Tone.gainToDb(intensity) - 10);
+    // Map intensity 0..1 to a more audible -24dB to 0dB range
+    const targetDb = Tone.gainToDb(Math.max(0.05, intensity * 0.95 + 0.05));
+    
     this.synth.volume.rampTo(targetDb, 0.5);
     if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);
     if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);
