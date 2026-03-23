@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as Tone from "tone";
@@ -85,8 +86,8 @@ class AudioEngine {
   private isChaining: boolean = false;
   private undoStack: string[] = [];
   
-  private midiAccess: MIDIAccess | null = null;
-  private midiOutput: MIDIOutput | null = null;
+  private midiAccess: any | null = null;
+  private midiOutput: any | null = null;
   
   private micStream: MediaStream | null = null;
   private micAnalyser: AnalyserNode | null = null;
@@ -131,8 +132,8 @@ class AudioEngine {
   }
 
   private initSampler(useCDN = false) {
+    if (typeof window === 'undefined') return;
     const baseUrl = useCDN ? "https://tonejs.github.io/audio/casio/" : "/samples/casio/";
-    if (this.pianoSampler) this.pianoSampler.dispose();
     
     this.pianoSampler = new Tone.Sampler({
       urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
@@ -286,7 +287,7 @@ class AudioEngine {
       reverbWet: this.reverb.wet.value,
       delayWet: this.delay.wet.value,
       delayFeedback: this.delay.feedback.value,
-      filterFrequency: this.filter.frequency.value as number,
+      filterFrequency: (this.filter.frequency.value as any),
       swingAmount: this.swingAmount,
       chordMode: this.chordMode,
       bpm: Tone.getTransport().bpm.value,
@@ -437,7 +438,7 @@ class AudioEngine {
   setDelay(wet: number, feedback: number) { this.delay.wet.rampTo(wet, 0.1); this.delay.feedback.rampTo(feedback, 0.1); this.saveSession(); }
   getDelay() { return { wet: this.delay.wet.value, feedback: this.delay.feedback.value }; }
   setFilter(freq: number) { this.filter.frequency.rampTo(freq, 0.1); this.saveSession(); }
-  getFilter() { return this.filter.frequency.value as number; }
+  getFilter() { return (this.filter.frequency.value as any); }
   setMasterVolume(val: number) { this.masterGain.gain.rampTo(val, 0.1); this.saveSession(); }
   getMasterVolume() { return this.masterGain.gain.value; }
 
@@ -503,7 +504,7 @@ class AudioEngine {
     const triggerTime = time || Tone.now();
     if (!time) {
       this.onDrumHitListeners.forEach(l => l());
-      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
+      if (typeof navigator !== 'undefined' && (navigator as any).vibrate) (navigator as any).vibrate(20);
     }
 
     const midiNotes: Record<string, number> = { 'hard': 36, 'soft': 38, 'roll': 42 };
@@ -524,7 +525,11 @@ class AudioEngine {
     }
   }
 
-  triggerNote(index: number) { if (Tone.getContext().state !== 'running') Tone.getContext().resume(); this.triggerNoteAtTime(index, Tone.now()); }
+  triggerNote(index: number) { 
+    if (typeof window === 'undefined') return;
+    if (Tone.getContext().state !== 'running') Tone.getContext().resume(); 
+    this.triggerNoteAtTime(index, Tone.now()); 
+  }
 
   private triggerNoteAtTime(rowIndex: number, time: any) {
     if (rowIndex < 0 || rowIndex >= this.notes.length) return;
@@ -604,3 +609,4 @@ class AudioEngine {
 }
 
 export const audioEngine = typeof window !== 'undefined' ? new AudioEngine() : null;
+

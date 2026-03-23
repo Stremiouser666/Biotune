@@ -55,25 +55,40 @@ export default function BiotuneApp() {
   const isSceneLongPress = useRef(false);
   const { toast } = useToast();
 
+  // Load shared session on mount
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const sharedData = params.get('session');
     if (sharedData && audioEngine) {
       try {
         const data = JSON.parse(atob(sharedData));
         audioEngine.loadSession(data);
-        setRootNote(data.rootNote || "C");
-        setChordMode(!!data.chordMode);
-        setBpm(data.bpm || 80);
-        setIsChaining(!!data.isChaining);
-        setActiveScene(data.activeSceneIndex || 0);
-        setSessionVersion(v => v + 1);
+        syncStateFromEngine();
         toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
       } catch (e) {
         console.error("Failed to parse shared session", e);
       }
     }
-  }, [toast]);
+  }, []);
+
+  const syncStateFromEngine = () => {
+    if (!audioEngine) return;
+    const data = audioEngine.getSessionData(true);
+    setBpm(data.bpm || 80);
+    setRootNote(data.rootNote || "C");
+    setChordMode(!!data.chordMode);
+    setIsChaining(!!data.isChaining);
+    setActiveScene(audioEngine.getActiveSceneIndex());
+    setMasterVolume(audioEngine.getMasterVolume());
+    setSwing(audioEngine.getSwing());
+    setReverbWet(audioEngine.getReverb());
+    const d = audioEngine.getDelay();
+    setDelayWet(d.wet);
+    setFilterFreq(audioEngine.getFilter());
+    setAudioMode(audioEngine.getMode());
+    setSessionVersion(v => v + 1);
+  };
 
   useEffect(() => {
     if (audioEngine) {
@@ -112,22 +127,10 @@ export default function BiotuneApp() {
     const interval = setInterval(() => {
       if (audioEngine) {
         setBpm(audioEngine.getBPM());
-        setAudioMode(audioEngine.getMode());
       }
-    }, 500);
+    }, 1000);
     return () => clearInterval(interval);
   }, [step]);
-
-  useEffect(() => {
-    if (audioEngine) {
-      setMasterVolume(audioEngine.getMasterVolume());
-      setSwing(audioEngine.getSwing());
-      setReverbWet(audioEngine.getReverb());
-      const d = audioEngine.getDelay();
-      setDelayWet(d.wet);
-      setFilterFreq(audioEngine.getFilter());
-    }
-  }, [sessionVersion]);
 
   useEffect(() => {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
@@ -185,12 +188,7 @@ export default function BiotuneApp() {
   const handleLoadSession = () => {
     const data = audioEngine?.loadSession();
     if (data) {
-      setSessionVersion(v => v + 1);
-      setRootNote(data.rootNote || "C");
-      setBpm(data.bpm || 80);
-      setChordMode(!!data.chordMode);
-      setIsChaining(!!data.isChaining);
-      setActiveScene(data.activeSceneIndex || 0);
+      syncStateFromEngine();
       toast({ title: "Session Loaded", description: `Restored slot ${activeSlot}.` });
     } else {
       toast({ variant: "destructive", title: "Load Failed" });
@@ -200,18 +198,14 @@ export default function BiotuneApp() {
   const handleUndo = () => {
     const lastState = audioEngine?.undo();
     if (lastState) {
-      setSessionVersion(v => v + 1);
-      setRootNote(lastState.rootNote || "C");
-      setBpm(lastState.bpm || 80);
-      setChordMode(!!lastState.chordMode);
-      setActiveScene(lastState.activeSceneIndex || 0);
+      syncStateFromEngine();
       toast({ title: "Action Undone" });
     }
   };
 
   const handleResetSession = () => {
     audioEngine?.resetSession();
-    setSessionVersion(v => v + 1);
+    syncStateFromEngine();
     toast({ title: "Session Reset" });
   };
 
@@ -220,12 +214,7 @@ export default function BiotuneApp() {
     audioEngine?.setSlot(slot);
     const data = audioEngine?.loadSession();
     if (data) {
-      setSessionVersion(v => v + 1);
-      setRootNote(data.rootNote || "C");
-      setChordMode(!!data.chordMode);
-      setIsChaining(!!data.isChaining);
-      setBpm(data.bpm || 80);
-      setActiveScene(data.activeSceneIndex || 0);
+      syncStateFromEngine();
     }
   };
 
@@ -278,8 +267,13 @@ export default function BiotuneApp() {
     }, 600);
   };
 
-  const stopSceneLongPress = () => {
+  const stopSceneLongPress = (idx: number) => {
     if (sceneLongPressTimer.current) clearTimeout(sceneLongPressTimer.current);
+    // If it wasn't a long press, switch to the scene
+    if (!isSceneLongPress.current) {
+      audioEngine?.setScene(idx);
+    }
+    isSceneLongPress.current = false;
   };
 
   const handleFileUpload = (type: 'piano' | 'kick' | 'snare' | 'hat', e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,14 +284,6 @@ export default function BiotuneApp() {
       else audioEngine?.setCustomDrums(type, url);
       toast({ title: "Sample Loaded", description: `${type.toUpperCase()} customized.` });
     }
-  };
-
-  const handleSceneClick = (idx: number) => {
-    if (isSceneLongPress.current) {
-      isSceneLongPress.current = false;
-      return;
-    }
-    audioEngine?.setScene(idx);
   };
 
   return (
@@ -395,10 +381,9 @@ export default function BiotuneApp() {
                           <div key={idx} className="flex-1 flex flex-col gap-1">
                             <button 
                               onPointerDown={() => startSceneLongPress(idx)}
-                              onPointerUp={stopSceneLongPress}
-                              onPointerLeave={stopSceneLongPress}
-                              onClick={() => handleSceneClick(idx)}
-                              onContextMenu={(e) => { e.preventDefault(); handleCopyScene(idx); }}
+                              onPointerUp={() => stopSceneLongPress(idx)}
+                              onPointerLeave={() => stopSceneLongPress(idx)}
+                              onContextMenu={(e) => { e.preventDefault(); }}
                               className={cn(
                                 "py-3 rounded-xl font-headline text-xs transition-all relative",
                                 activeScene === idx ? "bg-primary text-white shadow-md scale-105" : "bg-white/40"
@@ -464,7 +449,7 @@ export default function BiotuneApp() {
                         <div className="text-[9px] font-headline opacity-60 text-center">PRESETS</div>
                         <div className="flex gap-1.5 justify-center">
                           {["LO-FI", "AMBIENT", "UPTEMPO"].map(p => (
-                            <button key={p} onClick={() => { audioEngine?.loadPreset(p); setSessionVersion(v => v + 1); }} className="px-3 py-1.5 bg-white/40 rounded-lg text-[8px] font-headline hover:bg-primary/20">{p}</button>
+                            <button key={p} onClick={() => { audioEngine?.loadPreset(p); syncStateFromEngine(); }} className="px-3 py-1.5 bg-white/40 rounded-lg text-[8px] font-headline hover:bg-primary/20">{p}</button>
                           ))}
                         </div>
                       </div>
@@ -612,3 +597,4 @@ export default function BiotuneApp() {
     </main>
   );
 }
+
