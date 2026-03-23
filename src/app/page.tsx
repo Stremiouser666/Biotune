@@ -1,14 +1,14 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatedText } from '@/components/animated-text';
 import { Mascot } from '@/components/mascot';
 import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2 } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +38,8 @@ export default function BiotuneApp() {
   const [breathingIntensity, setBreathingIntensity] = useState(0);
   const [rootNote, setRootNote] = useState("C");
   const [sessionVersion, setSessionVersion] = useState(0);
+  const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
+  const tapTimes = useRef<number[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -60,6 +62,13 @@ export default function BiotuneApp() {
       }
     }, 500);
     return () => clearInterval(interval);
+  }, [step]);
+
+  useEffect(() => {
+    const isFirstTime = !localStorage.getItem('biotune_onboarded');
+    if (step === 'dashboard' && isFirstTime) {
+      setOnboardingStep(0);
+    }
   }, [step]);
 
   const handleCreateSound = async () => {
@@ -115,6 +124,34 @@ export default function BiotuneApp() {
     toast({ title: "Session Reset", description: "Starting with a clean magical canvas." });
   };
 
+  const handleTapTempo = () => {
+    const now = performance.now();
+    tapTimes.current = [...tapTimes.current, now].slice(-4);
+    if (tapTimes.current.length >= 2) {
+      const intervals = [];
+      for (let i = 1; i < tapTimes.current.length; i++) {
+        intervals.push(tapTimes.current[i] - tapTimes.current[i - 1]);
+      }
+      const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+      const nextBpm = 60000 / avgInterval;
+      audioEngine?.setBPM(nextBpm);
+      setBpm(nextBpm);
+    }
+  };
+
+  const handleShare = () => {
+    const data = audioEngine?.getSessionData();
+    const encoded = btoa(JSON.stringify(data));
+    const url = `${window.location.origin}?session=${encoded}`;
+    navigator.clipboard.writeText(url);
+    toast({ title: "Link Copied!", description: "Share this link with someone to show your creation." });
+  };
+
+  const finishOnboarding = () => {
+    setOnboardingStep(null);
+    localStorage.setItem('biotune_onboarded', 'true');
+  };
+
   return (
     <main className="relative min-h-svh w-full overflow-hidden">
       <div 
@@ -127,9 +164,14 @@ export default function BiotuneApp() {
       <div className="fixed inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.3)_1px,_transparent_1px)] bg-[length:40px_40px] animate-sparkle-move pointer-events-none" />
 
       {step === 'dashboard' && (
-        <button onClick={handleGoHome} className="fixed top-6 right-6 p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all z-50">
-          <Home className="w-6 h-6 text-primary" />
-        </button>
+        <div className="fixed top-6 right-6 flex gap-2 z-50">
+          <button onClick={handleShare} className="p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all">
+            <Share2 className="w-6 h-6 text-primary" />
+          </button>
+          <button onClick={handleGoHome} className="p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all">
+            <Home className="w-6 h-6 text-primary" />
+          </button>
+        </div>
       )}
 
       <div className="relative z-10 w-full h-svh flex flex-col items-center pt-[60px] px-6 text-center overflow-auto scrollbar-hide">
@@ -170,12 +212,48 @@ export default function BiotuneApp() {
           {step === 'dashboard' && (
             <div className="w-full animate-scroll-open space-y-4">
               <Accordion type="single" collapsible defaultValue="biometrics" className="w-full space-y-4">
-                <AccordionItem value="biometrics" className="border-none">
+                <AccordionItem value="biometrics" className={cn("border-none transition-all", onboardingStep === 0 && "ring-4 ring-primary ring-offset-4 rounded-2xl")}>
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Activity className="w-5 h-5 text-primary" /><span className="font-headline text-black">BIOMETRIC SYNC</span></div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4 px-2">
                     <BiometricMonitor onBreathingUpdate={setBreathingIntensity} />
+                    {onboardingStep === 0 && (
+                      <div className="mt-4 p-4 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-xs font-headline flex flex-col gap-3">
+                        Connect your mic and movement to influence the loop's pulse!
+                        <button onClick={() => setOnboardingStep(1)} className="bg-primary text-white py-2 rounded-lg">NEXT: MELODY</button>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="melody" className={cn("border-none transition-all", onboardingStep === 1 && "ring-4 ring-primary ring-offset-4 rounded-2xl")}>
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
+                    <div className="flex items-center gap-3"><Music className="w-5 h-5 text-primary" /><span className="font-headline text-black">MELODY STUDIO</span></div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <PianoRoll sessionVersion={sessionVersion} />
+                    {onboardingStep === 1 && (
+                      <div className="mt-4 p-4 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-xs font-headline flex flex-col gap-3">
+                        Tap cells to compose your magical theme. Long-press a row to clear it!
+                        <button onClick={() => setOnboardingStep(2)} className="bg-primary text-white py-2 rounded-lg">NEXT: RHYTHM</button>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="rhythm" className={cn("border-none transition-all", onboardingStep === 2 && "ring-4 ring-primary ring-offset-4 rounded-2xl")}>
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
+                    <div className="flex items-center gap-3"><Sparkles className="w-5 h-5 text-primary" /><span className="font-headline text-black">RHYTHM STUDIO</span></div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <DrumPads sessionVersion={sessionVersion} />
+                    {onboardingStep === 2 && (
+                      <div className="mt-4 p-4 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-xs font-headline flex flex-col gap-3">
+                        Layer beats into your session. Mute rows or clear them with a long-press.
+                        <button onClick={finishOnboarding} className="bg-primary text-white py-2 rounded-lg">LET'S GO!</button>
+                      </div>
+                    )}
                   </AccordionContent>
                 </AccordionItem>
 
@@ -221,6 +299,51 @@ export default function BiotuneApp() {
                   </AccordionContent>
                 </AccordionItem>
 
+                <AccordionItem value="engine" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
+                    <div className="flex items-center gap-3"><Settings2 className="w-5 h-5 text-primary" /><span className="font-headline text-black">LOOP ENGINE</span></div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <div className="p-8 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex flex-col gap-8 shadow-md">
+                      <div className="flex justify-between items-center w-full">
+                        <button onClick={togglePlay} className="p-6 bg-primary text-white rounded-full shadow-xl active:scale-95 transition-all">
+                          {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
+                        </button>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <div className="text-4xl font-headline text-primary">{bpm.toFixed(0)}</div>
+                          <button onClick={handleTapTempo} className="flex items-center gap-2 px-3 py-1 bg-white/40 rounded-lg text-[10px] font-headline">
+                            <Timer className="w-3 h-3" /> TAP TEMPO
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-6">
+                          <Volume2 className="w-5 h-5 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <div className="text-[10px] font-headline opacity-40 text-left">VOLUME</div>
+                            <Slider defaultValue={[1]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setMasterVolume(val)} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <Sparkles className="w-5 h-5 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <div className="text-[10px] font-headline opacity-40 text-left">MAGIC REVERB</div>
+                            <Slider defaultValue={[0.2]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setReverb(val)} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <Activity className="w-5 h-5 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <div className="text-[10px] font-headline opacity-40 text-left">HUMAN SWING</div>
+                            <Slider defaultValue={[0]} max={0.5} step={0.01} onValueChange={([val]) => audioEngine?.setSwing(val)} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
                 <AccordionItem value="memory" className="border-none">
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Save className="w-5 h-5 text-primary" /><span className="font-headline text-black">MAGIC MEMORY</span></div>
@@ -239,43 +362,6 @@ export default function BiotuneApp() {
                         <Trash2 className="w-6 h-6 text-destructive" />
                         <span className="text-[10px] font-headline text-destructive">RESET</span>
                       </button>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="melody" className="border-none">
-                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
-                    <div className="flex items-center gap-3"><Music className="w-5 h-5 text-primary" /><span className="font-headline text-black">MELODY STUDIO</span></div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2"><PianoRoll sessionVersion={sessionVersion} /></AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="rhythm" className="border-none">
-                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
-                    <div className="flex items-center gap-3"><Sparkles className="w-5 h-5 text-primary" /><span className="font-headline text-black">RHYTHM STUDIO</span></div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2"><DrumPads sessionVersion={sessionVersion} /></AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="engine" className="border-none">
-                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
-                    <div className="flex items-center gap-3"><Settings2 className="w-5 h-5 text-primary" /><span className="font-headline text-black">LOOP ENGINE</span></div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2">
-                    <div className="p-8 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex flex-col gap-8 shadow-md">
-                      <div className="flex justify-between items-center w-full">
-                        <button onClick={togglePlay} className="p-6 bg-primary text-white rounded-full shadow-xl active:scale-95 transition-all">
-                          {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
-                        </button>
-                        <div className="text-right">
-                          <div className="text-4xl font-headline text-primary">{bpm.toFixed(0)}</div>
-                          <div className="text-[10px] font-headline opacity-60">LIVE PULSE (BPM)</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6 w-full">
-                        <Volume2 className="w-5 h-5 opacity-40" />
-                        <Slider defaultValue={[0.8]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setMasterVolume(val)} className="flex-1" />
-                      </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>

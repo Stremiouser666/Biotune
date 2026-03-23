@@ -15,6 +15,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const [movement, setMovement] = useState(0);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -25,6 +26,16 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const breathingRef = useRef(0);
   const movementRef = useRef(0);
   const isMonitoringRef = useRef(false);
+  const stepRef = useRef(0);
+
+  useEffect(() => {
+    const handleStep = (step: number) => {
+      stepRef.current = step;
+      setCurrentStep(step);
+    };
+    audioEngine?.addOnStep(handleStep);
+    return () => audioEngine?.removeOnStep(handleStep);
+  }, []);
 
   const startMonitoring = async () => {
     try {
@@ -88,11 +99,18 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const ctx = canvasRef.current.getContext('2d');
     if (ctx) {
       ctx.clearRect(0, 0, 300, 60);
+      
+      // Draw analyzer bars
       ctx.fillStyle = '#ff4dff33';
       dataArray.forEach((val, i) => {
         const h = (val / 255) * 60;
         ctx.fillRect(i * 10, 60 - h, 8, h);
       });
+
+      // Draw vertical playhead
+      const playheadX = (stepRef.current / 16) * 300;
+      ctx.fillStyle = '#ff4dff88';
+      ctx.fillRect(playheadX, 0, 4, 60);
     }
     
     animationFrameRef.current = requestAnimationFrame(analyze);
@@ -116,7 +134,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       } else if (avg > 0.7) {
         nextBpm += 1;
       } else {
-        // Drift back towards base BPM if in neutral zone
         if (Math.abs(currentBpm - baseBpm) > 0.5) {
           nextBpm += (baseBpm - currentBpm) * 0.05; 
         } else {
@@ -125,7 +142,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       }
       
       audioEngine.setBPM(nextBpm);
-      
       if (m > 0.85) audioEngine.triggerDrum('hard');
     }, 1000);
   };
@@ -157,7 +173,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
             <div className="flex items-center gap-2 font-headline text-primary animate-pulse">
               <Activity className="w-4 h-4" /> BIOMETRICS ACTIVE
             </div>
-            <canvas ref={canvasRef} width="300" height="60" className="w-full h-12 opacity-60" />
+            <canvas ref={canvasRef} width="300" height="60" className="w-full h-12 rounded-lg bg-black/5" />
             <div className="flex gap-8">
               <div className="text-center">
                 <Wind className="w-4 h-4 mx-auto text-primary mb-1" />
