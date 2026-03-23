@@ -1,49 +1,63 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { audioEngine } from '@/lib/audio-engine';
 import { cn } from '@/lib/utils';
 
 const PADS = [
   { id: 'kick', label: 'Kick', type: 'hard' },
   { id: 'snare', label: 'Snare', type: 'soft' },
-  { id: 'hat', label: 'Hat', type: 'soft' },
-  { id: 'roll', label: 'Roll', type: 'roll' },
+  { id: 'hat', label: 'Hat', type: 'roll' },
+  { id: 'perc', label: 'Perc', type: 'soft' },
 ] as const;
 
 export function DrumPads() {
-  const [activePad, setActivePad] = useState<string | null>(null);
+  const [grid, setGrid] = useState<boolean[][]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const handlePadTrigger = (id: string, type: 'soft' | 'hard' | 'roll') => {
-    setActivePad(id);
+  useEffect(() => {
+    if (audioEngine) {
+      setGrid([...audioEngine.getDrumGrid()]);
+      audioEngine.setOnStep((step) => setCurrentStep(step));
+    }
+  }, []);
+
+  const toggleStep = (padIndex: number, stepIndex: number) => {
+    audioEngine?.toggleDrumStep(padIndex, stepIndex);
+    setGrid([...audioEngine!.getDrumGrid()]);
+  };
+
+  const manualTrigger = (padIndex: number, type: 'soft' | 'hard' | 'roll') => {
     audioEngine?.triggerDrum(type);
-    setTimeout(() => setActivePad(null), 150);
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4 w-full max-w-md mx-auto">
-      {PADS.map((pad) => (
-        <button
-          key={pad.id}
-          onPointerDown={() => handlePadTrigger(pad.id, pad.type)}
-          className={cn(
-            "h-28 rounded-3xl border-2 flex flex-col items-center justify-center transition-all active:scale-95",
-            "bg-white/40 backdrop-blur-sm shadow-lg",
-            activePad === pad.id 
-              ? "border-[#ff4dff] bg-[#ff4dff]/20 shadow-[#ff4dff]/40" 
-              : "border-white/60 hover:border-[#ff4dff] shadow-black/5",
-            "text-black font-headline tracking-wider uppercase text-lg"
-          )}
-        >
-          {pad.label}
-          <div className={cn(
-            "mt-3 w-12 h-2 rounded-full transition-all",
-            activePad === pad.id 
-              ? "bg-white shadow-[0_0_15px_white]" 
-              : "bg-[#ff4dff] shadow-[0_0_10px_rgba(255,77,255,0.5)]"
-          )} />
-        </button>
+    <div className="flex flex-col gap-6 w-full max-w-2xl mx-auto">
+      {PADS.map((pad, padIdx) => (
+        <div key={pad.id} className="bg-white/20 p-4 rounded-3xl border border-white/30 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <button
+              onPointerDown={() => manualTrigger(padIdx, pad.type)}
+              className="px-6 py-2 bg-white/40 rounded-xl font-headline text-xs hover:bg-white/60 active:scale-95 transition-all"
+            >
+              {pad.label}
+            </button>
+            <div className="flex gap-1 flex-1 ml-4 overflow-x-auto py-2 scrollbar-hide">
+              {grid[padIdx]?.map((active, stepIdx) => (
+                <button
+                  key={stepIdx}
+                  onClick={() => toggleStep(padIdx, stepIdx)}
+                  className={cn(
+                    "w-4 h-4 rounded-full transition-all border border-black/5 shrink-0",
+                    active ? "bg-primary shadow-[0_0_8px_primary]" : "bg-white/20",
+                    currentStep === stepIdx && "scale-125 border-white ring-2 ring-primary/20"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       ))}
     </div>
   );
