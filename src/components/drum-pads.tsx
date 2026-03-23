@@ -14,19 +14,19 @@ const PADS = [
 
 export function DrumPads() {
   return (
-    <div className="grid grid-cols-2 gap-3 w-full max-w-md mx-auto">
+    <div className="grid grid-cols-2 gap-4 w-full max-w-md mx-auto">
       {PADS.map((pad) => (
         <button
           key={pad.id}
           onPointerDown={() => audioEngine?.triggerDrum(pad.type)}
           className={cn(
-            "h-24 rounded-2xl border-2 border-white/10 flex flex-col items-center justify-center transition-all active:scale-95",
-            "bg-gradient-to-br from-card to-background hover:border-primary/50 shadow-lg",
-            "text-primary font-bold tracking-wider uppercase text-sm"
+            "h-28 rounded-3xl border-2 border-white/60 flex flex-col items-center justify-center transition-all active:scale-95",
+            "bg-white/40 backdrop-blur-sm hover:border-[#ff4dff] shadow-lg hover:shadow-[#ff4dff]/20",
+            "text-black font-headline tracking-wider uppercase text-lg"
           )}
         >
           {pad.label}
-          <div className="mt-2 w-8 h-1 bg-primary/20 rounded-full" />
+          <div className="mt-3 w-12 h-2 bg-[#ff4dff] rounded-full shadow-[0_0_10px_rgba(255,77,255,0.5)]" />
         </button>
       ))}
     </div>

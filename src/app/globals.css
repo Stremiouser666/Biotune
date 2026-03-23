@@ -5,25 +5,25 @@
 
 @layer base {
   :root {
-    --background: 317 27% 16%; /* #361F30 */
-    --foreground: 0 0% 100%;
-    --card: 317 27% 20%;
-    --card-foreground: 0 0% 100%;
-    --popover: 317 27% 16%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 318 80% 52%; /* #E526AB */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 300 100% 65%; /* #ff4dff */
     --primary-foreground: 0 0% 100%;
-    --secondary: 317 27% 25%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 317 27% 25%;
-    --muted-foreground: 0 0% 70%;
-    --accent: 295 100% 75%; /* #EE80FF */
-    --accent-foreground: 317 27% 16%;
+    --secondary: 0 0% 90%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 300 100% 90%;
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 317 27% 30%;
-    --input: 317 27% 30%;
-    --ring: 295 100% 75%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 300 100% 65%;
     --radius: 1rem;
   }
 }
@@ -33,29 +33,59 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground overflow-hidden;
+    @apply bg-background text-foreground overflow-hidden font-body;
   }
 }
 
-.word-reveal span {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: reveal 0.3s forwards;
+.font-frijole {
+  font-family: 'Frijole', cursive;
 }
 
-@keyframes reveal {
+@keyframes moveSparkles {
+  from { background-position: 0 0; }
+  to { background-position: 200px 200px; }
+}
+
+.animate-sparkle-move {
+  animation: moveSparkles 12s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.animate-mascot-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes fadeWord {
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.mascot-blink {
-  animation: blink 4s infinite;
+.word-animation {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeWord 0.6s forwards;
 }
 
 @keyframes blink {
   0%, 90%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
+  95% { transform: scaleY(0.15); }
+}
+
+.mascot-blink {
+  animation: blink 4s infinite;
+}
+
+@keyframes talk {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(2px) scaleY(1.05); }
+}
+
+.mascot-talk {
+  animation: talk 0.2s infinite;
 }

@@ -32,16 +32,17 @@ export function AnimatedText({ text, className, onComplete, delayPerWord = 150 }
   }, [text, delayPerWord, words.length, onComplete]);
 
   return (
-    <div className={cn("word-reveal flex flex-wrap justify-center gap-x-2", className)}>
+    <div className={cn("flex flex-wrap justify-center gap-x-2", className)}>
       {words.map((word, i) => (
         <span
           key={i}
           style={{
-            animationDelay: `${i * 0.05}s`,
-            opacity: i < visibleCount ? 1 : 0,
-            transform: i < visibleCount ? 'translateY(0)' : 'translateY(10px)'
+            animationDelay: `${i * 0.15}s`,
           }}
-          className="transition-all duration-300 ease-out"
+          className={cn(
+            "word-animation text-black drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]",
+            i < visibleCount ? "opacity-100 translate-y-0" : "opacity-0 translate-y-[10px]"
+          )}
         >
           {word}
         </span>
