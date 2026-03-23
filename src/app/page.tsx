@@ -8,10 +8,12 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +35,15 @@ export default function BiotuneApp() {
   const [step, setStep] = useState<FlowStep>('intro');
   const [bpm, setBpm] = useState(80);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
   const [isPulsing, setIsPulsing] = useState(false);
   const [breathingIntensity, setBreathingIntensity] = useState(0);
   const [rootNote, setRootNote] = useState("C");
   const [sessionVersion, setSessionVersion] = useState(0);
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
+  const [chordMode, setChordMode] = useState(false);
+  const [activeSlot, setActiveSlot] = useState('A');
   const tapTimes = useRef<number[]>([]);
   const { toast } = useToast();
 
@@ -86,6 +91,18 @@ export default function BiotuneApp() {
     setIsPlaying(!isPlaying);
   };
 
+  const handleToggleRecording = async () => {
+    if (!isRecording) {
+      await audioEngine?.startRecording();
+      setIsRecording(true);
+      toast({ title: "Recording Started", description: "Capturing your magical creation..." });
+    } else {
+      await audioEngine?.stopRecording();
+      setIsRecording(false);
+      toast({ title: "Recording Saved", description: "Audio exported successfully!" });
+    }
+  };
+
   const handleGoHome = () => {
     audioEngine?.stop();
     setIsPlaying(false);
@@ -103,25 +120,44 @@ export default function BiotuneApp() {
 
   const handleSaveSession = () => {
     audioEngine?.saveSession();
-    toast({ title: "Session Saved", description: "Your magical creation is safe in your browser." });
+    toast({ title: "Session Saved", description: `Slot ${activeSlot} is safe in your browser.` });
   };
 
   const handleLoadSession = () => {
     const data = audioEngine?.loadSession();
     if (data) {
       setSessionVersion(v => v + 1);
-      setRootNote(data.rootNote);
+      setRootNote(data.rootNote || "C");
       setBpm(audioEngine?.getBPM() || 80);
-      toast({ title: "Session Loaded", description: "Welcome back to your creation!" });
+      setChordMode(!!data.chordMode);
+      toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
     } else {
-      toast({ variant: "destructive", title: "Load Failed", description: "No saved session found." });
+      toast({ variant: "destructive", title: "Load Failed", description: `No saved data in slot ${activeSlot}.` });
     }
   };
 
   const handleResetSession = () => {
     audioEngine?.resetSession();
     setSessionVersion(v => v + 1);
-    toast({ title: "Session Reset", description: "Starting with a clean magical canvas." });
+    toast({ title: "Session Reset", description: `Slot ${activeSlot} has been cleared.` });
+  };
+
+  const handleSwitchSlot = (slot: string) => {
+    setActiveSlot(slot);
+    audioEngine?.setSlot(slot);
+    // Auto-load slot when switched
+    const data = audioEngine?.loadSession();
+    if (data) {
+      setSessionVersion(v => v + 1);
+      setRootNote(data.rootNote || "C");
+      setChordMode(!!data.chordMode);
+    }
+  };
+
+  const handleToggleChordMode = (val: boolean) => {
+    setChordMode(val);
+    audioEngine?.setChordMode(val);
+    audioEngine?.saveSession();
   };
 
   const handleTapTempo = () => {
@@ -231,11 +267,22 @@ export default function BiotuneApp() {
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Music className="w-5 h-5 text-primary" /><span className="font-headline text-black">MELODY STUDIO</span></div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2">
+                  <AccordionContent className="pt-4 px-2 space-y-4">
+                    <div className="flex items-center justify-between px-6 py-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/40">
+                      <div className="flex items-center gap-3">
+                        <Zap className={cn("w-4 h-4 transition-colors", chordMode ? "text-primary" : "text-black/40")} />
+                        <Label htmlFor="chord-mode" className="text-[10px] font-headline cursor-pointer">CHORD MODE</Label>
+                      </div>
+                      <Switch 
+                        id="chord-mode" 
+                        checked={chordMode} 
+                        onCheckedChange={handleToggleChordMode}
+                      />
+                    </div>
                     <PianoRoll sessionVersion={sessionVersion} />
                     {onboardingStep === 1 && (
                       <div className="mt-4 p-4 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-xs font-headline flex flex-col gap-3">
-                        Tap cells to compose your magical theme. Long-press a row to clear it!
+                        Tap cells to compose your magical theme. Enable Chord Mode for lush sounds!
                         <button onClick={() => setOnboardingStep(2)} className="bg-primary text-white py-2 rounded-lg">NEXT: RHYTHM</button>
                       </div>
                     )}
@@ -306,9 +353,20 @@ export default function BiotuneApp() {
                   <AccordionContent className="pt-4 px-2">
                     <div className="p-8 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex flex-col gap-8 shadow-md">
                       <div className="flex justify-between items-center w-full">
-                        <button onClick={togglePlay} className="p-6 bg-primary text-white rounded-full shadow-xl active:scale-95 transition-all">
-                          {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
-                        </button>
+                        <div className="flex gap-4">
+                          <button onClick={togglePlay} className="p-6 bg-primary text-white rounded-full shadow-xl active:scale-95 transition-all">
+                            {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
+                          </button>
+                          <button 
+                            onClick={handleToggleRecording} 
+                            className={cn(
+                              "p-6 rounded-full shadow-xl active:scale-95 transition-all",
+                              isRecording ? "bg-red-500 animate-pulse text-white" : "bg-white/40 text-black/60"
+                            )}
+                          >
+                            {isRecording ? <Square className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+                          </button>
+                        </div>
                         <div className="text-right flex flex-col items-end gap-2">
                           <div className="text-4xl font-headline text-primary">{bpm.toFixed(0)}</div>
                           <button onClick={handleTapTempo} className="flex items-center gap-2 px-3 py-1 bg-white/40 rounded-lg text-[10px] font-headline">
@@ -348,7 +406,21 @@ export default function BiotuneApp() {
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Save className="w-5 h-5 text-primary" /><span className="font-headline text-black">MAGIC MEMORY</span></div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2">
+                  <AccordionContent className="pt-4 px-2 space-y-4">
+                    <div className="flex justify-center gap-3 p-2 bg-white/20 rounded-2xl">
+                      {['A', 'B', 'C'].map(slot => (
+                        <button 
+                          key={slot}
+                          onClick={() => handleSwitchSlot(slot)}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl font-headline text-xs transition-all",
+                            activeSlot === slot ? "bg-primary text-white scale-105 shadow-md" : "bg-white/40"
+                          )}
+                        >
+                          SLOT {slot}
+                        </button>
+                      ))}
+                    </div>
                     <div className="grid grid-cols-3 gap-4 p-4 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
                       <button onClick={handleSaveSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
                         <Save className="w-6 h-6 text-primary" />

@@ -17,10 +17,13 @@ class AudioEngine {
   
   private reverb: Tone.Reverb;
   private masterGain: Tone.Gain;
+  private recorder: Tone.Recorder;
   
   private isStarted = false;
   private isLoaded = false;
   private mode: AudioMode = 'sampled';
+  private chordMode: boolean = false;
+  private currentSlot: string = 'A';
   
   // Sequencer State
   private melodyGrid: boolean[][] = Array(8).fill(null).map(() => Array(8).fill(false));
@@ -39,6 +42,10 @@ class AudioEngine {
   constructor() {
     this.reverb = new Tone.Reverb({ decay: 2, wet: 0.2 }).toDestination();
     this.masterGain = new Tone.Gain(1).connect(this.reverb);
+    this.recorder = new Tone.Recorder();
+    
+    // Connect everything to the recorder
+    this.reverb.connect(this.recorder);
 
     this.synth = new Tone.PolySynth(Tone.Synth).connect(this.masterGain);
     this.drumSynth = new Tone.MembraneSynth().connect(this.masterGain);
@@ -65,9 +72,43 @@ class AudioEngine {
     this.loadSession();
   }
 
+  public async startRecording() {
+    if (this.recorder.state !== "started") {
+      this.recorder.start();
+    }
+  }
+
+  public async stopRecording() {
+    if (this.recorder.state === "started") {
+      const recording = await this.recorder.stop();
+      const url = URL.createObjectURL(recording);
+      const anchor = document.createElement("a");
+      anchor.download = `biotune-creation-${this.currentSlot}-${Date.now()}.webm`;
+      anchor.href = url;
+      anchor.click();
+    }
+  }
+
+  public setSlot(slot: string) {
+    this.currentSlot = slot;
+  }
+
+  public getSlot() {
+    return this.currentSlot;
+  }
+
+  public setChordMode(active: boolean) {
+    this.chordMode = active;
+  }
+
+  public getChordMode() {
+    return this.chordMode;
+  }
+
   public loadSession(dataToLoad?: any) {
     if (typeof window === 'undefined') return null;
-    const saved = dataToLoad || JSON.parse(localStorage.getItem('biotune_session') || 'null');
+    const key = `biotune_session_${this.currentSlot}`;
+    const saved = dataToLoad || JSON.parse(localStorage.getItem(key) || 'null');
     if (saved) {
       try {
         this.melodyGrid = saved.melodyGrid || Array(8).fill(null).map(() => Array(8).fill(false));
@@ -75,6 +116,7 @@ class AudioEngine {
         this.drumMutes = saved.drumMutes || [false, false, false, false];
         this.rootNote = saved.rootNote || "C";
         this.swingAmount = saved.swingAmount || 0;
+        this.chordMode = !!saved.chordMode;
         this.setSwing(this.swingAmount);
         this.updateScale(this.rootNote);
         if (saved.reverbWet !== undefined) this.setReverb(saved.reverbWet);
@@ -93,13 +135,15 @@ class AudioEngine {
       drumMutes: this.drumMutes,
       rootNote: this.rootNote,
       reverbWet: this.reverb.wet.value,
-      swingAmount: this.swingAmount
+      swingAmount: this.swingAmount,
+      chordMode: this.chordMode
     };
   }
 
   public saveSession() {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('biotune_session', JSON.stringify(this.getSessionData()));
+    const key = `biotune_session_${this.currentSlot}`;
+    localStorage.setItem(key, JSON.stringify(this.getSessionData()));
   }
 
   public resetSession() {
@@ -139,7 +183,7 @@ class AudioEngine {
       const melodyStep = this.currentStep % 8;
       this.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) {
-          this.triggerNoteAtTime(this.notes[rowIndex], time);
+          this.triggerNoteAtTime(rowIndex, time);
         }
       });
 
@@ -209,9 +253,8 @@ class AudioEngine {
   }
   
   randomizeMelody() {
-    const pentatonicSteps = [0, 2, 4, 7, 9]; // Indices in our 8-note scale that feel "safer"
-    this.melodyGrid = this.melodyGrid.map((row, rIdx) => 
-      row.map(() => Math.random() > 0.85)
+    this.melodyGrid = this.melodyGrid.map(() => 
+      Array(8).fill(null).map(() => Math.random() > 0.85)
     );
     this.saveSession();
   }
@@ -260,17 +303,28 @@ class AudioEngine {
   }
 
   triggerNote(note: string) {
-    this.triggerNoteAtTime(note, Tone.now());
+    // Simple wrapper for live UI taps
+    this.triggerNoteAtTime(this.notes.indexOf(note), Tone.now());
   }
 
-  private triggerNoteAtTime(note: string, time: any) {
-    if (this.mode === 'custom' && this.customPianoSampler) {
-       this.customPianoSampler.triggerAttackRelease(note, "4n", time);
-    } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
-      this.pianoSampler.triggerAttackRelease(note, "4n", time);
-    } else {
-      this.synth.triggerAttackRelease(note, "4n", time);
+  private triggerNoteAtTime(rowIndex: number, time: any) {
+    const notesToPlay = [this.notes[rowIndex]];
+    
+    if (this.chordMode) {
+      // Add the "3rd" and "5th" from the scale array if within bounds
+      if (rowIndex + 2 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 2]);
+      if (rowIndex + 4 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 4]);
     }
+
+    notesToPlay.forEach(note => {
+      if (this.mode === 'custom' && this.customPianoSampler) {
+        this.customPianoSampler.triggerAttackRelease(note, "4n", time);
+      } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
+        this.pianoSampler.triggerAttackRelease(note, "4n", time);
+      } else {
+        this.synth.triggerAttackRelease(note, "4n", time);
+      }
+    });
   }
 
   setAmbience(intensity: number) {
