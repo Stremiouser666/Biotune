@@ -55,7 +55,6 @@ class AudioEngine {
   private chordMode: boolean = false;
   private currentSlot: string = 'A';
   
-  // Multi-Scene State
   private scenes: SceneData[] = Array(4).fill(null).map(() => ({
     melodyGrid: Array(8).fill(null).map(() => Array(16).fill(false)),
     drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
@@ -75,11 +74,10 @@ class AudioEngine {
   private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; 
   private rootNote: string = "C";
 
-  // Sensitivity
   private micSensitivity: number = 1.0;
   private motionSensitivity: number = 1.0;
+  private currentAmbience: number = 0.5;
 
-  // Undo Stack (Last 10 states)
   private undoStack: string[] = [];
 
   private onStepListeners: Set<(step: number) => void> = new Set();
@@ -104,20 +102,17 @@ class AudioEngine {
       envelope: { attack: 0.1, release: 1.2, decay: 0.3, sustain: 0.4 }
     });
 
-    // Bundled sample configuration: Update paths to /samples for offline/PWA capability
     this.pianoSampler = new Tone.Sampler({
       urls: {
         "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3",
         "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3",
       },
-      baseUrl: "/samples/casio/", // Local path for bundling. Place Casio .mp3 files here.
+      baseUrl: "/samples/casio/",
       onload: () => { 
         this.isLoaded = true; 
         this.onLoadListeners.forEach(l => l(true));
       },
-      onerror: (err) => {
-        console.warn("Local samples missing at /samples/casio/. Falling back to remote Tone.js assets.");
-        // Attempt to load from remote as a secondary fallback
+      onerror: () => {
         this.pianoSampler?.set({
           baseUrl: "https://tonejs.github.io/audio/casio/",
         });
@@ -126,7 +121,7 @@ class AudioEngine {
 
     this.drumPlayers = new Tone.Players({
       urls: { kick: "kick.mp3", snare: "snare.mp3", hat: "hihat.mp3" },
-      baseUrl: "/samples/drums/", // Local path for bundling. Place CR78 samples here.
+      baseUrl: "/samples/drums/",
     }).connect(this.masterGain);
 
     this.loadSession();
@@ -206,9 +201,9 @@ class AudioEngine {
         if (saved.scenes) {
           this.scenes = saved.scenes;
           this.activeSceneIndex = saved.activeSceneIndex || 0;
-        } else {
+        } else if (saved.melodyGrid) {
           this.scenes[0] = {
-            melodyGrid: saved.melodyGrid || Array(8).fill(null).map(() => Array(16).fill(false)),
+            melodyGrid: saved.melodyGrid,
             drumGrid: saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false)),
             melodyLength: saved.melodyLength || 8,
             drumLength: saved.drumLength || 16,
@@ -242,10 +237,8 @@ class AudioEngine {
     return null;
   }
 
-  public getSessionData(): SessionState {
-    const currentScene = this.scenes[this.activeSceneIndex];
-    return {
-      scenes: this.scenes,
+  public getSessionData(activeOnly = false): any {
+    const data: any = {
       activeSceneIndex: this.activeSceneIndex,
       drumMutes: this.drumMutes,
       rootNote: this.rootNote,
@@ -262,6 +255,15 @@ class AudioEngine {
       micSensitivity: this.micSensitivity,
       motionSensitivity: this.motionSensitivity,
     };
+
+    if (activeOnly) {
+      data.scenes = [this.scenes[this.activeSceneIndex]];
+      data.activeSceneIndex = 0;
+    } else {
+      data.scenes = this.scenes;
+    }
+
+    return data;
   }
 
   public saveSession() {
@@ -349,10 +351,10 @@ class AudioEngine {
   setMode(mode: AudioMode) { this.mode = mode; }
   getMode(): AudioMode { return this.mode; }
 
-  setBPM(bpm: number) {
+  setBPM(bpm: number, skipSave = false) {
     const clampedBpm = Math.max(40, Math.min(180, bpm));
     Tone.getTransport().bpm.rampTo(clampedBpm, 0.5);
-    this.saveSession();
+    if (!skipSave) this.saveSession();
   }
   getBPM() { return Tone.getTransport().bpm.value; }
 
@@ -501,23 +503,25 @@ class AudioEngine {
       if (rowIndex + 4 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 4]);
     }
 
-    const currentTargetDb = Tone.gainToDb(Math.max(0.1, this.micSensitivity * 0.9 + 0.1));
+    const targetGain = Math.max(0.1, (this.currentAmbience * 0.7 + 0.3) * this.micSensitivity);
+    const targetDb = Tone.gainToDb(targetGain);
 
     notesToPlay.forEach(note => {
       if (this.mode === 'custom' && this.customPianoSampler) {
-        this.customPianoSampler.volume.value = currentTargetDb;
+        this.customPianoSampler.volume.value = targetDb;
         this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
-        this.pianoSampler.volume.value = currentTargetDb;
+        this.pianoSampler.volume.value = targetDb;
         this.pianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else {
-        this.synth.volume.value = currentTargetDb;
+        this.synth.volume.value = targetDb;
         this.synth.triggerAttackRelease(note, this.noteLength, time);
       }
     });
   }
 
   setAmbience(intensity: number) {
+    this.currentAmbience = intensity;
     const targetDb = Tone.gainToDb(Math.max(0.1, intensity * 0.9 + 0.1));
     this.synth.volume.rampTo(targetDb, 0.5);
     if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);

@@ -20,7 +20,7 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   useEffect(() => {
     if (audioEngine) {
       setGrid([...audioEngine.getMelodyGrid().map(row => [...row])]);
-      setCurrentNotes(audioEngine.getNotes());
+      setCurrentNotes([...audioEngine.getNotes()]);
       setPatternLength(audioEngine.getMelodyLength());
       const handleStep = (step: number) => setCurrentStep(step % audioEngine.getMelodyLength());
       audioEngine.addOnStep(handleStep);
@@ -84,7 +84,7 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
                 onPointerLeave={cancelLongPress}
                 className="w-12 flex items-center justify-center text-[10px] font-headline opacity-40 hover:opacity-100 transition-opacity bg-white/10 rounded-l-md select-none shrink-0"
               >
-                {currentNotes[rowIndex]}
+                {currentNotes[rowIndex] || "-"}
               </button>
               {row.slice(0, patternLength).map((active, colIndex) => (
                 <button

@@ -15,6 +15,7 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Toaster } from "@/components/ui/toaster";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,25 @@ export default function BiotuneApp() {
   const { toast } = useToast();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedData = params.get('session');
+    if (sharedData && audioEngine) {
+      try {
+        const data = JSON.parse(atob(sharedData));
+        audioEngine.loadSession(data);
+        setRootNote(data.rootNote || "C");
+        setChordMode(!!data.chordMode);
+        setBpm(data.bpm || 80);
+        setActiveScene(data.activeSceneIndex || 0);
+        setSessionVersion(v => v + 1);
+        toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
+      } catch (e) {
+        console.error("Failed to parse shared session", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (audioEngine) {
       setIsLoaded(audioEngine.getIsLoaded());
       const handleHit = () => {
@@ -66,22 +86,6 @@ export default function BiotuneApp() {
         setSessionVersion(v => v + 1);
       });
       
-      const params = new URLSearchParams(window.location.search);
-      const sharedData = params.get('session');
-      if (sharedData) {
-        try {
-          const data = JSON.parse(atob(sharedData));
-          audioEngine.loadSession(data);
-          setRootNote(data.rootNote || "C");
-          setChordMode(!!data.chordMode);
-          setBpm(data.bpm || 80);
-          setActiveScene(data.activeSceneIndex || 0);
-          toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
-        } catch (e) {
-          console.error("Failed to parse shared session", e);
-        }
-      }
-
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.code === 'Space' && step === 'dashboard' && !isFullscreen) {
           e.preventDefault();
@@ -112,7 +116,6 @@ export default function BiotuneApp() {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
     if (step === 'dashboard' && isFirstTime) {
       setOnboardingStep(0);
-      setAccordionValue("biometrics");
     }
   }, [step]);
 
@@ -175,7 +178,7 @@ export default function BiotuneApp() {
     if (data) {
       setSessionVersion(v => v + 1);
       setRootNote(data.rootNote || "C");
-      setBpm(data.bpm || audioEngine?.getBPM() || 80);
+      setBpm(data.bpm || 80);
       setChordMode(!!data.chordMode);
       setActiveScene(data.activeSceneIndex || 0);
       toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
@@ -238,11 +241,11 @@ export default function BiotuneApp() {
   };
 
   const handleShare = () => {
-    const data = audioEngine?.getSessionData();
+    const data = audioEngine?.getSessionData(true);
     const encoded = btoa(JSON.stringify(data));
     const url = `${window.location.origin}${window.location.pathname}?session=${encoded}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link Copied!", description: "Share this URL to show off your magical session." });
+    toast({ title: "Link Copied!", description: "Sharing active scene only to keep URL stable." });
   };
 
   const finishOnboarding = () => {
@@ -343,11 +346,11 @@ export default function BiotuneApp() {
                           <span>{(audioEngine?.getMicSensitivity() || 1).toFixed(1)}x</span>
                         </div>
                         <Slider 
-                          defaultValue={[audioEngine?.getMicSensitivity() || 1]} 
+                          value={[audioEngine?.getMicSensitivity() || 1]} 
                           max={3} 
                           min={0.1} 
                           step={0.1} 
-                          onValueChange={([v]) => audioEngine?.setMicSensitivity(v)} 
+                          onValueChange={([v]) => { audioEngine?.setMicSensitivity(v); setSessionVersion(v => v + 1); }} 
                         />
                       </div>
                       <div className="flex flex-col gap-1">
@@ -356,11 +359,11 @@ export default function BiotuneApp() {
                           <span>{(audioEngine?.getMotionSensitivity() || 1).toFixed(1)}x</span>
                         </div>
                         <Slider 
-                          defaultValue={[audioEngine?.getMotionSensitivity() || 1]} 
+                          value={[audioEngine?.getMotionSensitivity() || 1]} 
                           max={3} 
                           min={0.1} 
                           step={0.1} 
-                          onValueChange={([v]) => audioEngine?.setMotionSensitivity(v)} 
+                          onValueChange={([v]) => { audioEngine?.setMotionSensitivity(v); setSessionVersion(v => v + 1); }} 
                         />
                       </div>
                     </div>
@@ -464,7 +467,7 @@ export default function BiotuneApp() {
                             {['sine', 'triangle', 'square', 'sawtooth'].map(type => (
                               <button 
                                 key={type} 
-                                onClick={() => audioEngine?.setOscillator(type as OscillatorType)} 
+                                onClick={() => { audioEngine?.setOscillator(type as OscillatorType); setSessionVersion(v => v + 1); }} 
                                 className={cn("py-1 text-[7px] rounded-md font-headline", audioEngine?.getOscillator() === type ? "bg-primary text-white" : "bg-white/40")}
                               >
                                 {type.slice(0, 4).toUpperCase()}
@@ -482,7 +485,7 @@ export default function BiotuneApp() {
                             ].map(({id, label}) => (
                               <button 
                                 key={id} 
-                                onClick={() => audioEngine?.setNoteLength(id as NoteLength)} 
+                                onClick={() => { audioEngine?.setNoteLength(id as NoteLength); setSessionVersion(v => v + 1); }} 
                                 className={cn("py-0.5 text-[7px] rounded-md font-headline", audioEngine?.getNoteLength() === id ? "bg-primary text-white" : "bg-white/40")}
                               >
                                 {label}
@@ -569,7 +572,7 @@ export default function BiotuneApp() {
                           <Volume2 className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">VOLUME</div>
-                            <Slider defaultValue={[1]} max={1} step={0.01} onValueChange={([val]) => audioEngine?.setMasterVolume(val)} />
+                            <Slider value={[audioEngine?.getSessionData().masterVolume || 1]} max={1} step={0.01} onValueChange={([val]) => { audioEngine?.setMasterVolume(val); setSessionVersion(v => v + 1); }} />
                           </div>
                         </div>
 
@@ -578,14 +581,14 @@ export default function BiotuneApp() {
                             <Sparkles className="w-4 h-4 opacity-40 shrink-0" />
                             <div className="flex-1 space-y-1">
                               <div className="text-[8px] font-headline opacity-40 text-left">REVERB</div>
-                              <Slider defaultValue={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => audioEngine?.setReverb(v)} />
+                              <Slider value={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setReverb(v); setSessionVersion(v => v + 1); }} />
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <Sliders className="w-4 h-4 opacity-40 shrink-0" />
                             <div className="flex-1 space-y-1">
                               <div className="text-[8px] font-headline opacity-40 text-left">DELAY</div>
-                              <Slider defaultValue={[0.3]} max={1} step={0.01} onValueChange={([v]) => audioEngine?.setDelay(v, 0.5)} />
+                              <Slider value={[audioEngine?.getDelay().wet || 0.3]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setDelay(v, 0.5); setSessionVersion(v => v + 1); }} />
                             </div>
                           </div>
                         </div>
@@ -594,7 +597,7 @@ export default function BiotuneApp() {
                           <Activity className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">FILTER</div>
-                            <Slider defaultValue={[20000]} max={20000} min={100} step={1} onValueChange={([v]) => audioEngine?.setFilter(v)} />
+                            <Slider value={[audioEngine?.getFilter() || 20000]} max={20000} min={100} step={1} onValueChange={([v]) => { audioEngine?.setFilter(v); setSessionVersion(v => v + 1); }} />
                           </div>
                         </div>
                         
@@ -602,7 +605,7 @@ export default function BiotuneApp() {
                           <Activity className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">SWING</div>
-                            <Slider defaultValue={[0]} max={0.5} step={0.01} onValueChange={([val]) => audioEngine?.setSwing(val)} />
+                            <Slider value={[audioEngine?.getSwing() || 0]} max={0.5} step={0.01} onValueChange={([val]) => { audioEngine?.setSwing(val); setSessionVersion(v => v + 1); }} />
                           </div>
                         </div>
                       </div>
@@ -654,6 +657,7 @@ export default function BiotuneApp() {
           )}
         </div>
       </div>
+      <Toaster />
     </main>
   );
 }

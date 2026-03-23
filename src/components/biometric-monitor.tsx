@@ -34,7 +34,10 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       setCurrentStep(step);
     };
     audioEngine?.addOnStep(handleStep);
-    return () => audioEngine?.removeOnStep(handleStep);
+    return () => {
+      audioEngine?.removeOnStep(handleStep);
+      stopMonitoring();
+    };
   }, []);
 
   const startMonitoring = async () => {
@@ -88,7 +91,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   };
 
   const analyze = () => {
-    if (!analyserRef.current || !canvasRef.current) return;
+    if (!analyserRef.current || !canvasRef.current || !isMonitoringRef.current) return;
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
@@ -132,11 +135,13 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       const baseBpm = 80;
       let nextBpm = currentBpm;
 
+      // Target-based drift logic
       if (avg < 0.3) {
         nextBpm -= 1; 
       } else if (avg > 0.7) {
         nextBpm += 1;
       } else {
+        // Drift back to 80 BPM if intensity is neutral
         if (Math.abs(currentBpm - baseBpm) > 0.5) {
           nextBpm += (baseBpm - currentBpm) * 0.05; 
         } else {
@@ -144,12 +149,11 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
         }
       }
       
-      audioEngine.setBPM(nextBpm);
+      // Skip localStorage save on every poll hit to prevent performance drag
+      audioEngine.setBPM(nextBpm, true);
       if (m > 0.85) audioEngine.triggerDrum('hard');
     }, 1000);
   };
-
-  useEffect(() => { return () => stopMonitoring(); }, []);
 
   return (
     <div className="flex flex-col gap-4 items-center w-full">
