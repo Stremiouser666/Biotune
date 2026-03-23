@@ -8,13 +8,13 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart, Home, Plus, Minus, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2 } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -33,10 +33,11 @@ export default function BiotuneApp() {
   const [bpm, setBpm] = useState(80);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
-  const [customFiles, setCustomFiles] = useState<{ [key: string]: string }>({});
   const [isPulsing, setIsPulsing] = useState(false);
   const [breathingIntensity, setBreathingIntensity] = useState(0);
   const [rootNote, setRootNote] = useState("C");
+  const [sessionVersion, setSessionVersion] = useState(0);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (audioEngine) {
@@ -83,9 +84,31 @@ export default function BiotuneApp() {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    setCustomFiles(prev => ({ ...prev, [type]: file.name }));
     if (type === 'piano') audioEngine?.setCustomPiano(url);
     else audioEngine?.setCustomDrums(type as any, url);
+    toast({ title: "Sample Imported", description: `${type.toUpperCase()} is now customized!` });
+  };
+
+  const handleSaveSession = () => {
+    audioEngine?.saveSession();
+    toast({ title: "Session Saved", description: "Your magical creation is safe in your browser." });
+  };
+
+  const handleLoadSession = () => {
+    const success = audioEngine?.loadSession();
+    if (success) {
+      setSessionVersion(v => v + 1);
+      setRootNote(audioEngine?.getMelodyGrid() ? "C" : rootNote); // Fallback logic
+      toast({ title: "Session Loaded", description: "Welcome back to your creation!" });
+    } else {
+      toast({ variant: "destructive", title: "Load Failed", description: "No saved session found." });
+    }
+  };
+
+  const handleResetSession = () => {
+    audioEngine?.resetSession();
+    setSessionVersion(v => v + 1);
+    toast({ title: "Session Reset", description: "Starting with a clean magical canvas." });
   };
 
   return (
@@ -117,7 +140,7 @@ export default function BiotuneApp() {
           {step === 'intro' && (
             <div className="flex flex-col items-center gap-10">
               <AnimatedText text="Hi… let’s create magical music from you together 🎶" className="text-2xl md:text-4xl font-headline" />
-              <button onClick={handleCreateSound} className="px-8 py-5 text-xl bg-primary text-white rounded-2xl shadow-[0_0_30px_rgba(255,77,255,0.8)] transition-all hover:scale-105 active:scale-95 font-headline">
+              <button onClick={handleCreateSound} className="px-8 py-5 text-xl bg-primary text-white rounded-2xl shadow-[0_0_30px_rgba(255,77,255,0.8)] transition-all hover:scale-105 active:scale-95 font-headline whitespace-nowrap">
                 ✨ CREATE MY SOUND
               </button>
             </div>
@@ -172,18 +195,40 @@ export default function BiotuneApp() {
                   </AccordionContent>
                 </AccordionItem>
 
+                <AccordionItem value="memory" className="border-none">
+                  <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
+                    <div className="flex items-center gap-3"><Save className="w-5 h-5 text-primary" /><span className="font-headline text-black">MAGIC MEMORY</span></div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4 px-2">
+                    <div className="grid grid-cols-3 gap-4 p-4 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
+                      <button onClick={handleSaveSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
+                        <Save className="w-6 h-6 text-primary" />
+                        <span className="text-[10px] font-headline">SAVE</span>
+                      </button>
+                      <button onClick={handleLoadSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
+                        <RotateCcw className="w-6 h-6 text-primary" />
+                        <span className="text-[10px] font-headline">LOAD</span>
+                      </button>
+                      <button onClick={handleResetSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-destructive/20 transition-all active:scale-95">
+                        <Trash2 className="w-6 h-6 text-destructive" />
+                        <span className="text-[10px] font-headline text-destructive">RESET</span>
+                      </button>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
                 <AccordionItem value="melody" className="border-none">
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Music className="w-5 h-5 text-primary" /><span className="font-headline text-black">MELODY STUDIO</span></div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2"><PianoRoll /></AccordionContent>
+                  <AccordionContent className="pt-4 px-2"><PianoRoll sessionVersion={sessionVersion} /></AccordionContent>
                 </AccordionItem>
 
                 <AccordionItem value="rhythm" className="border-none">
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Sparkles className="w-5 h-5 text-primary" /><span className="font-headline text-black">RHYTHM STUDIO</span></div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2"><DrumPads /></AccordionContent>
+                  <AccordionContent className="pt-4 px-2"><DrumPads sessionVersion={sessionVersion} /></AccordionContent>
                 </AccordionItem>
 
                 <AccordionItem value="engine" className="border-none">

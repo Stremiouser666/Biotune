@@ -5,20 +5,24 @@ import React, { useState, useEffect } from 'react';
 import { audioEngine } from '@/lib/audio-engine';
 import { cn } from '@/lib/utils';
 
-export function PianoRoll() {
+interface PianoRollProps {
+  sessionVersion?: number;
+}
+
+export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   const [grid, setGrid] = useState<boolean[][]>([]);
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
     if (audioEngine) {
-      setGrid([...audioEngine.getMelodyGrid()]);
+      setGrid([...audioEngine.getMelodyGrid().map(row => [...row])]);
       audioEngine.setOnStep((step) => setCurrentStep(step % 8));
     }
-  }, []);
+  }, [sessionVersion]);
 
   const toggleCell = (row: number, col: number) => {
     audioEngine?.toggleMelody(row, col);
-    setGrid([...audioEngine!.getMelodyGrid()]);
+    setGrid([...audioEngine!.getMelodyGrid().map(r => [...r])]);
     if (!grid[row][col]) {
       const notes = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"];
       audioEngine?.triggerNote(notes[row]);

@@ -25,7 +25,7 @@ class AudioEngine {
   private currentStep = 0;
   private repeatEvent: number | null = null;
 
-  private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; // Pentatonic-ish
+  private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; 
   private rootNote: string = "C";
 
   private onStepCallback: ((step: number) => void) | null = null;
@@ -57,26 +57,38 @@ class AudioEngine {
     this.loadSession();
   }
 
-  private loadSession() {
-    if (typeof window === 'undefined') return;
+  public loadSession() {
+    if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem('biotune_session');
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        this.melodyGrid = data.melodyGrid || this.melodyGrid;
-        this.drumGrid = data.drumGrid || this.drumGrid;
+        this.melodyGrid = data.melodyGrid || Array(8).fill(null).map(() => Array(8).fill(false));
+        this.drumGrid = data.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false));
         this.rootNote = data.rootNote || "C";
         this.updateScale(this.rootNote);
-      } catch (e) { console.error("Session load error", e); }
+        return data;
+      } catch (e) { 
+        console.error("Session load error", e); 
+        return null;
+      }
     }
+    return null;
   }
 
-  saveSession() {
+  public saveSession() {
+    if (typeof window === 'undefined') return;
     localStorage.setItem('biotune_session', JSON.stringify({
       melodyGrid: this.melodyGrid,
       drumGrid: this.drumGrid,
       rootNote: this.rootNote
     }));
+  }
+
+  public resetSession() {
+    this.melodyGrid = Array(8).fill(null).map(() => Array(8).fill(false));
+    this.drumGrid = Array(4).fill(null).map(() => Array(16).fill(false));
+    this.saveSession();
   }
 
   setOnStep(callback: (step: number) => void) { this.onStepCallback = callback; }
@@ -103,7 +115,6 @@ class AudioEngine {
     if (this.repeatEvent !== null) Tone.getTransport().clear(this.repeatEvent);
     
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
-      // Melody (8 steps)
       const melodyStep = this.currentStep % 8;
       this.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) {
@@ -111,12 +122,11 @@ class AudioEngine {
         }
       });
 
-      // Drums (16 steps)
       const drumStep = this.currentStep % 16;
-      if (this.drumGrid[0][drumStep]) this.triggerDrum('hard', time); // Kick
-      if (this.drumGrid[1][drumStep]) this.triggerDrum('soft', time); // Snare
-      if (this.drumGrid[2][drumStep]) this.triggerDrum('roll', time); // Hat
-      if (this.drumGrid[3][drumStep]) this.triggerDrum('soft', time); // Perc
+      if (this.drumGrid[0][drumStep]) this.triggerDrum('hard', time); 
+      if (this.drumGrid[1][drumStep]) this.triggerDrum('soft', time); 
+      if (this.drumGrid[2][drumStep]) this.triggerDrum('roll', time); 
+      if (this.drumGrid[3][drumStep]) this.triggerDrum('soft', time); 
 
       if (this.onStepCallback) {
         Tone.Draw.schedule(() => this.onStepCallback!(this.currentStep), time);
@@ -147,7 +157,6 @@ class AudioEngine {
 
   updateScale(root: string) {
     this.rootNote = root;
-    // Simple Pentatonic Mapping
     const scaleMap: Record<string, string[]> = {
       "C": ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"],
       "D": ["D5", "B4", "A4", "G4", "F#4", "E4", "D4", "A3"],
@@ -156,20 +165,16 @@ class AudioEngine {
       "G": ["G5", "E5", "D5", "C5", "B4", "A4", "G4", "D4"]
     };
     this.notes = scaleMap[root] || scaleMap["C"];
-    this.saveSession();
   }
 
-  // Grid Getters/Setters
   getMelodyGrid() { return this.melodyGrid; }
   toggleMelody(row: number, col: number) { 
     this.melodyGrid[row][col] = !this.melodyGrid[row][col]; 
-    this.saveSession();
   }
 
   getDrumGrid() { return this.drumGrid; }
   toggleDrumStep(padIndex: number, stepIndex: number) { 
     this.drumGrid[padIndex][stepIndex] = !this.drumGrid[padIndex][stepIndex]; 
-    this.saveSession();
   }
 
   triggerDrum(type: 'soft' | 'hard' | 'roll', time?: any) {

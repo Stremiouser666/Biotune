@@ -5,6 +5,10 @@ import React, { useState, useEffect } from 'react';
 import { audioEngine } from '@/lib/audio-engine';
 import { cn } from '@/lib/utils';
 
+interface DrumPadsProps {
+  sessionVersion?: number;
+}
+
 const PADS = [
   { id: 'kick', label: 'Kick', type: 'hard' },
   { id: 'snare', label: 'Snare', type: 'soft' },
@@ -12,20 +16,20 @@ const PADS = [
   { id: 'perc', label: 'Perc', type: 'soft' },
 ] as const;
 
-export function DrumPads() {
+export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
   const [grid, setGrid] = useState<boolean[][]>([]);
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
     if (audioEngine) {
-      setGrid([...audioEngine.getDrumGrid()]);
+      setGrid([...audioEngine.getDrumGrid().map(row => [...row])]);
       audioEngine.setOnStep((step) => setCurrentStep(step));
     }
-  }, []);
+  }, [sessionVersion]);
 
   const toggleStep = (padIndex: number, stepIndex: number) => {
     audioEngine?.toggleDrumStep(padIndex, stepIndex);
-    setGrid([...audioEngine!.getDrumGrid()]);
+    setGrid([...audioEngine!.getDrumGrid().map(r => [...r])]);
   };
 
   const manualTrigger = (padIndex: number, type: 'soft' | 'hard' | 'roll') => {
@@ -44,14 +48,14 @@ export function DrumPads() {
               {pad.label}
             </button>
             <div className="flex gap-1 flex-1 ml-4 overflow-x-auto py-2 scrollbar-hide">
-              {grid[padIdx]?.map((active, stepIdx) => (
+              {grid[padIdx]?.map((active, stepIndex) => (
                 <button
-                  key={stepIdx}
-                  onClick={() => toggleStep(padIdx, stepIdx)}
+                  key={stepIndex}
+                  onClick={() => toggleStep(padIdx, stepIndex)}
                   className={cn(
                     "w-4 h-4 rounded-full transition-all border border-black/5 shrink-0",
                     active ? "bg-primary shadow-[0_0_8px_primary]" : "bg-white/20",
-                    currentStep === stepIdx && "scale-125 border-white ring-2 ring-primary/20"
+                    currentStep === stepIndex && "scale-125 border-white ring-2 ring-primary/20"
                   )}
                 />
               ))}
