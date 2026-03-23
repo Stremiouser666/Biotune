@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as Tone from "tone";
@@ -91,6 +90,7 @@ class AudioEngine {
   
   private micStream: MediaStream | null = null;
   private micAnalyser: AnalyserNode | null = null;
+  private micPromise: Promise<AnalyserNode> | null = null;
 
   private onStepListeners: Set<(step: number) => void> = new Set();
   private onDrumHitListeners: Set<() => void> = new Set();
@@ -138,20 +138,40 @@ class AudioEngine {
       urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
       baseUrl,
       onload: () => { this.isLoaded = true; this.onLoadListeners.forEach(l => l(true)); },
-      onerror: () => { if (!useCDN) this.initSampler(true); }
+      onerror: () => { 
+        console.warn("Local samples failed, falling back to CDN...");
+        this.initSampler(true); 
+      }
     }).connect(this.masterGain);
   }
 
-  public async getMic() {
+  public async getMic(): Promise<AnalyserNode> {
     if (this.micAnalyser) return this.micAnalyser;
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
-    this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const context = Tone.getContext().rawContext as AudioContext;
-    const source = context.createMediaStreamSource(this.micStream);
-    this.micAnalyser = context.createAnalyser();
-    this.micAnalyser.fftSize = 256;
-    source.connect(this.micAnalyser);
-    return this.micAnalyser;
+    if (this.micPromise) return this.micPromise;
+
+    this.micPromise = (async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
+        
+        // Ensure Tone context is running
+        if (Tone.getContext().state !== 'running') {
+          await Tone.start();
+        }
+
+        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const context = Tone.getContext().rawContext as AudioContext;
+        const source = context.createMediaStreamSource(this.micStream);
+        this.micAnalyser = context.createAnalyser();
+        this.micAnalyser.fftSize = 256;
+        source.connect(this.micAnalyser);
+        return this.micAnalyser;
+      } catch (e) {
+        this.micPromise = null;
+        throw e;
+      }
+    })();
+
+    return this.micPromise;
   }
 
   public getIsLoaded() { return this.isLoaded; }
@@ -420,6 +440,7 @@ class AudioEngine {
   setFilter(freq: number) { this.filter.frequency.rampTo(freq, 0.1); this.saveSession(); }
   getFilter() { return this.filter.frequency.value as number; }
   setMasterVolume(val: number) { this.masterGain.gain.rampTo(val, 0.1); this.saveSession(); }
+  getMasterVolume() { return this.masterGain.gain.value; }
 
   updateScale(root: string) {
     this.rootNote = root;
@@ -530,7 +551,7 @@ class AudioEngine {
       } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
         this.pianoSampler.volume.value = targetDb;
         this. pianoSampler.triggerAttackRelease(note, this.noteLength, time);
-      } else {
+      } else if (this.mode === 'synth') {
         this.synth.volume.value = targetDb;
         this.synth.triggerAttackRelease(note, this.noteLength, time);
       }

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -43,8 +42,17 @@ export default function BiotuneApp() {
   const [activeScene, setActiveScene] = useState(0);
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // Stored values for sliders to avoid expensive serializations
+  const [masterVolume, setMasterVolume] = useState(1);
+  const [swing, setSwing] = useState(0);
+  const [reverbWet, setReverbWet] = useState(0.25);
+  const [delayWet, setDelayWet] = useState(0.3);
+  const [filterFreq, setFilterFreq] = useState(20000);
+
   const tapTimes = useRef<number[]>([]);
   const sceneLongPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isSceneLongPress = useRef(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -109,6 +117,17 @@ export default function BiotuneApp() {
     }, 500);
     return () => clearInterval(interval);
   }, [step]);
+
+  useEffect(() => {
+    if (audioEngine) {
+      setMasterVolume(audioEngine.getMasterVolume());
+      setSwing(audioEngine.getSwing());
+      setReverbWet(audioEngine.getReverb());
+      const d = audioEngine.getDelay();
+      setDelayWet(d.wet);
+      setFilterFreq(audioEngine.getFilter());
+    }
+  }, [sessionVersion]);
 
   useEffect(() => {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
@@ -252,13 +271,33 @@ export default function BiotuneApp() {
   };
 
   const startSceneLongPress = (idx: number) => {
+    isSceneLongPress.current = false;
     sceneLongPressTimer.current = setTimeout(() => {
+      isSceneLongPress.current = true;
       handleCopyScene(idx);
     }, 600);
   };
 
   const stopSceneLongPress = () => {
     if (sceneLongPressTimer.current) clearTimeout(sceneLongPressTimer.current);
+  };
+
+  const handleFileUpload = (type: 'piano' | 'kick' | 'snare' | 'hat', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      if (type === 'piano') audioEngine?.setCustomPiano(url);
+      else audioEngine?.setCustomDrums(type, url);
+      toast({ title: "Sample Loaded", description: `${type.toUpperCase()} customized.` });
+    }
+  };
+
+  const handleSceneClick = (idx: number) => {
+    if (isSceneLongPress.current) {
+      isSceneLongPress.current = false;
+      return;
+    }
+    audioEngine?.setScene(idx);
   };
 
   return (
@@ -358,7 +397,7 @@ export default function BiotuneApp() {
                               onPointerDown={() => startSceneLongPress(idx)}
                               onPointerUp={stopSceneLongPress}
                               onPointerLeave={stopSceneLongPress}
-                              onClick={() => audioEngine?.setScene(idx)}
+                              onClick={() => handleSceneClick(idx)}
                               onContextMenu={(e) => { e.preventDefault(); handleCopyScene(idx); }}
                               className={cn(
                                 "py-3 rounded-xl font-headline text-xs transition-all relative",
@@ -437,6 +476,23 @@ export default function BiotuneApp() {
                           ))}
                         </div>
                       </div>
+                      
+                      <div className="space-y-3 p-3 bg-black/5 rounded-xl">
+                        <div className="text-[9px] font-headline opacity-60 text-center flex items-center justify-center gap-2">
+                          <Upload className="w-3 h-3" /> CUSTOM SAMPLES
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {['piano', 'kick', 'snare', 'hat'].map(type => (
+                            <div key={type} className="relative">
+                              <label className="flex flex-col items-center gap-1 p-2 bg-white/40 rounded-lg cursor-pointer hover:bg-white/60 transition-all">
+                                <span className="text-[8px] font-headline">{type.toUpperCase()}</span>
+                                <input type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileUpload(type as any, e)} />
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <div className="text-[8px] font-headline opacity-60 text-center">WAVE</div>
@@ -489,14 +545,14 @@ export default function BiotuneApp() {
                           <Volume2 className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">MASTER</div>
-                            <Slider value={[audioEngine?.getSessionData().masterVolume || 1]} max={1} step={0.01} onValueChange={([val]) => { audioEngine?.setMasterVolume(val); setSessionVersion(v => v + 1); }} />
+                            <Slider value={[masterVolume]} max={1} step={0.01} onValueChange={([val]) => { setMasterVolume(val); audioEngine?.setMasterVolume(val); }} />
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <Activity className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">SWING</div>
-                            <Slider value={[audioEngine?.getSwing() || 0]} max={0.5} step={0.01} onValueChange={([v]) => { audioEngine?.setSwing(v); setSessionVersion(v => v + 1); }} />
+                            <Slider value={[swing]} max={0.5} step={0.01} onValueChange={([v]) => { setSwing(v); audioEngine?.setSwing(v); }} />
                           </div>
                         </div>
                       </div>
@@ -505,14 +561,14 @@ export default function BiotuneApp() {
                           <Sparkles className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">REVERB</div>
-                            <Slider value={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setReverb(v); setSessionVersion(v => v + 1); }} />
+                            <Slider value={[reverbWet]} max={1} step={0.01} onValueChange={([v]) => { setReverbWet(v); audioEngine?.setReverb(v); }} />
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <Sliders className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">DELAY</div>
-                            <Slider value={[audioEngine?.getDelay().wet || 0.3]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setDelay(v, 0.5); setSessionVersion(v => v + 1); }} />
+                            <Slider value={[delayWet]} max={1} step={0.01} onValueChange={([v]) => { setDelayWet(v); audioEngine?.setDelay(v, 0.5); }} />
                           </div>
                         </div>
                       </div>
@@ -520,7 +576,7 @@ export default function BiotuneApp() {
                         <Activity className="w-4 h-4 opacity-40 shrink-0" />
                         <div className="flex-1 space-y-1">
                           <div className="text-[8px] font-headline opacity-40 text-left">FILTER</div>
-                          <Slider value={[audioEngine?.getFilter() || 20000]} max={20000} min={100} step={1} onValueChange={([v]) => { audioEngine?.setFilter(v); setSessionVersion(v => v + 1); }} />
+                          <Slider value={[filterFreq]} max={20000} min={100} step={1} onValueChange={([v]) => { setFilterFreq(v); audioEngine?.setFilter(v); }} />
                         </div>
                       </div>
                     </div>
