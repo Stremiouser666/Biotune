@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -72,7 +73,7 @@ export default function BiotuneApp() {
         console.error("Failed to parse shared session", e);
       }
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (audioEngine) {
@@ -293,7 +294,7 @@ export default function BiotuneApp() {
 
   const handleSceneClick = (idx: number) => {
     if (isSceneLongPress.current) {
-      isLongPress.current = false;
+      isSceneLongPress.current = false;
       return;
     }
     audioEngine?.setScene(idx);

@@ -27,11 +27,19 @@ export function FullscreenVisualizer({ onClose, breathingIntensity }: Fullscreen
   const [currentStep, setCurrentStep] = useState(0);
   const [isStrobing, setIsStrobing] = useState(false);
   const [isAmbient, setIsAmbient] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 });
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
 
   useEffect(() => {
+    // Set dimensions on mount and resize
+    const updateDimensions = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+
     const handleStep = (step: number) => { setCurrentStep(step % 16); };
     const handleDrumHit = () => {
       setIsStrobing(true);
@@ -49,6 +57,7 @@ export function FullscreenVisualizer({ onClose, breathingIntensity }: Fullscreen
     connectMic();
 
     return () => {
+      window.removeEventListener('resize', updateDimensions);
       audioEngine?.removeOnStep(handleStep);
       audioEngine?.removeOnDrumHit(handleDrumHit);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -150,7 +159,7 @@ export function FullscreenVisualizer({ onClose, breathingIntensity }: Fullscreen
       isAmbient && "brightness-50"
     )}>
       <div className="absolute inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover opacity-20 scale-110" />
-      <canvas ref={canvasRef} width={typeof window !== 'undefined' ? window.innerWidth : 1920} height={typeof window !== 'undefined' ? window.innerHeight : 1080} className="absolute inset-0 w-full h-full" />
+      <canvas ref={canvasRef} width={dimensions.width} height={dimensions.height} className="absolute inset-0 w-full h-full" />
 
       <div className="relative z-10 flex flex-col items-center gap-12 text-center transition-all duration-500" style={{ opacity: isAmbient ? 0.3 : 1, transform: `scale(${isAmbient ? 0.7 : 1})` }}>
         <div className="relative">
