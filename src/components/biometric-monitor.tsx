@@ -79,7 +79,10 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const acc = event.acceleration || event.accelerationIncludingGravity;
     if (!acc) return;
     const total = Math.sqrt((acc.x || 0)**2 + (acc.y || 0)**2 + ((acc.z || 0) - (event.acceleration ? 0 : 9.8))**2);
-    const normalized = Math.min(1, total / 15);
+    
+    const sens = audioEngine?.getMotionSensitivity() || 1.0;
+    const normalized = Math.min(1, (total / 15) * sens);
+    
     movementRef.current = movementRef.current * 0.7 + normalized * 0.3;
     setMovement(movementRef.current);
   };
@@ -89,8 +92,10 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
+    const sens = audioEngine?.getMicSensitivity() || 1.0;
     const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    const normalized = Math.min(1, avg / 120);
+    const normalized = Math.min(1, (avg / 120) * sens);
+    
     breathingRef.current = normalized;
     setBreathing(normalized);
     onBreathingUpdate?.(normalized);
@@ -100,14 +105,12 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     if (ctx) {
       ctx.clearRect(0, 0, 300, 60);
       
-      // Draw analyzer bars
       ctx.fillStyle = '#ff4dff33';
       dataArray.forEach((val, i) => {
         const h = (val / 255) * 60;
         ctx.fillRect(i * 10, 60 - h, 8, h);
       });
 
-      // Draw vertical playhead
       const playheadX = (stepRef.current / 16) * 300;
       ctx.fillStyle = '#ff4dff88';
       ctx.fillRect(playheadX, 0, 4, 60);

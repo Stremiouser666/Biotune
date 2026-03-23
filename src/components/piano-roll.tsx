@@ -14,13 +14,15 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   const [grid, setGrid] = useState<boolean[][]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [currentNotes, setCurrentNotes] = useState<string[]>([]);
+  const [patternLength, setPatternLength] = useState(8);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (audioEngine) {
       setGrid([...audioEngine.getMelodyGrid().map(row => [...row])]);
       setCurrentNotes(audioEngine.getNotes());
-      const handleStep = (step: number) => setCurrentStep(step % 8);
+      setPatternLength(audioEngine.getMelodyLength());
+      const handleStep = (step: number) => setCurrentStep(step % audioEngine.getMelodyLength());
       audioEngine.addOnStep(handleStep);
       return () => audioEngine.removeOnStep(handleStep);
     }
@@ -50,8 +52,28 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
+  const updateLength = (len: number) => {
+    setPatternLength(len);
+    audioEngine?.setMelodyLength(len);
+  };
+
   return (
     <div className="flex flex-col gap-4 w-full">
+      <div className="flex gap-2 justify-center mb-2">
+        <span className="text-[10px] font-headline opacity-40 py-2">LENGTH</span>
+        {[4, 8, 16].map(len => (
+          <button 
+            key={len} 
+            onClick={() => updateLength(len)}
+            className={cn(
+              "px-3 py-1 rounded-md text-[10px] font-headline transition-all",
+              patternLength === len ? "bg-primary text-white" : "bg-white/40"
+            )}
+          >
+            {len}
+          </button>
+        ))}
+      </div>
       <div className="w-full bg-white/30 backdrop-blur-md p-4 rounded-3xl border border-white/50 shadow-xl overflow-x-auto">
         <div className="flex flex-col gap-1 min-w-[300px]">
           {grid.map((row, rowIndex) => (
@@ -60,11 +82,11 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
                 onPointerDown={() => startLongPress(rowIndex)}
                 onPointerUp={cancelLongPress}
                 onPointerLeave={cancelLongPress}
-                className="w-10 flex items-center justify-center text-[10px] font-headline opacity-40 hover:opacity-100 transition-opacity bg-white/10 rounded-l-md select-none"
+                className="w-12 flex items-center justify-center text-[10px] font-headline opacity-40 hover:opacity-100 transition-opacity bg-white/10 rounded-l-md select-none shrink-0"
               >
                 {currentNotes[rowIndex]}
               </button>
-              {row.map((active, colIndex) => (
+              {row.slice(0, patternLength).map((active, colIndex) => (
                 <button
                   key={colIndex}
                   onClick={() => toggleCell(rowIndex, colIndex)}

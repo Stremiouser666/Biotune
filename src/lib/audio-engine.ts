@@ -4,6 +4,26 @@
 import * as Tone from "tone";
 
 export type AudioMode = 'synth' | 'sampled' | 'custom';
+export type OscillatorType = 'sine' | 'triangle' | 'square' | 'sawtooth';
+export type NoteLength = '16n' | '8n' | '4n';
+
+interface SessionState {
+  melodyGrid: boolean[][];
+  drumGrid: boolean[][];
+  drumMutes: boolean[];
+  rootNote: string;
+  reverbWet: number;
+  swingAmount: number;
+  chordMode: boolean;
+  bpm: number;
+  masterVolume: number;
+  melodyLength: number;
+  drumLength: number;
+  oscillatorType: OscillatorType;
+  noteLength: NoteLength;
+  micSensitivity: number;
+  motionSensitivity: number;
+}
 
 class AudioEngine {
   private synth: Tone.PolySynth;
@@ -26,9 +46,14 @@ class AudioEngine {
   private currentSlot: string = 'A';
   
   // Sequencer State
-  private melodyGrid: boolean[][] = Array(8).fill(null).map(() => Array(8).fill(false));
+  private melodyGrid: boolean[][] = Array(8).fill(null).map(() => Array(16).fill(false));
   private drumGrid: boolean[][] = Array(4).fill(null).map(() => Array(16).fill(false));
   private drumMutes: boolean[] = [false, false, false, false];
+  private melodyLength: number = 8;
+  private drumLength: number = 16;
+  private oscillatorType: OscillatorType = 'triangle';
+  private noteLength: NoteLength = '4n';
+  
   private currentStep = 0;
   private repeatEvent: number | null = null;
   private swingAmount = 0;
@@ -36,8 +61,16 @@ class AudioEngine {
   private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; 
   private rootNote: string = "C";
 
+  // Sensitivity
+  private micSensitivity: number = 1.0;
+  private motionSensitivity: number = 1.0;
+
+  // Undo Stack (Last 10 states)
+  private undoStack: string[] = [];
+
   private onStepListeners: Set<(step: number) => void> = new Set();
   private onDrumHitListeners: Set<() => void> = new Set();
+  private onLoadListeners: Set<(loaded: boolean) => void> = new Set();
 
   constructor() {
     this.reverb = new Tone.Reverb({ decay: 2.5, wet: 0.25 }).toDestination();
@@ -62,10 +95,12 @@ class AudioEngine {
       baseUrl: "https://tonejs.github.io/audio/casio/",
       onload: () => { 
         this.isLoaded = true; 
+        this.onLoadListeners.forEach(l => l(true));
       },
       onerror: (err) => {
         console.warn("Sampler failed to load, falling back to synth.", err);
         this.isLoaded = false;
+        this.onLoadListeners.forEach(l => l(false));
       }
     }).connect(this.masterGain);
 
@@ -75,6 +110,22 @@ class AudioEngine {
     }).connect(this.masterGain);
 
     this.loadSession();
+  }
+
+  public getIsLoaded() { return this.isLoaded; }
+  public addOnLoad(l: (v: boolean) => void) { this.onLoadListeners.add(l); }
+
+  private pushUndo() {
+    const state = JSON.stringify(this.getSessionData());
+    this.undoStack.push(state);
+    if (this.undoStack.length > 10) this.undoStack.shift();
+  }
+
+  public undo() {
+    if (this.undoStack.length === 0) return null;
+    const lastState = JSON.parse(this.undoStack.pop()!);
+    this.loadSession(lastState);
+    return lastState;
   }
 
   public async startRecording() {
@@ -117,17 +168,24 @@ class AudioEngine {
     const saved = dataToLoad || JSON.parse(localStorage.getItem(key) || 'null');
     if (saved) {
       try {
-        this.melodyGrid = saved.melodyGrid || Array(8).fill(null).map(() => Array(8).fill(false));
+        this.melodyGrid = saved.melodyGrid || Array(8).fill(null).map(() => Array(16).fill(false));
         this.drumGrid = saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false));
         this.drumMutes = saved.drumMutes || [false, false, false, false];
         this.rootNote = saved.rootNote || "C";
         this.swingAmount = saved.swingAmount || 0;
         this.chordMode = !!saved.chordMode;
+        this.melodyLength = saved.melodyLength || 8;
+        this.drumLength = saved.drumLength || 16;
+        this.oscillatorType = saved.oscillatorType || 'triangle';
+        this.noteLength = saved.noteLength || '4n';
+        this.micSensitivity = saved.micSensitivity || 1.0;
+        this.motionSensitivity = saved.motionSensitivity || 1.0;
         
         if (saved.bpm) Tone.getTransport().bpm.value = saved.bpm;
         
         this.setSwing(this.swingAmount);
         this.updateScale(this.rootNote);
+        this.setOscillator(this.oscillatorType);
         if (saved.reverbWet !== undefined) this.setReverb(saved.reverbWet);
         if (saved.masterVolume !== undefined) this.setMasterVolume(saved.masterVolume);
         
@@ -139,7 +197,7 @@ class AudioEngine {
     return null;
   }
 
-  public getSessionData() {
+  public getSessionData(): SessionState {
     return {
       melodyGrid: this.melodyGrid,
       drumGrid: this.drumGrid,
@@ -149,7 +207,13 @@ class AudioEngine {
       swingAmount: this.swingAmount,
       chordMode: this.chordMode,
       bpm: Tone.getTransport().bpm.value,
-      masterVolume: this.masterGain.gain.value
+      masterVolume: this.masterGain.gain.value,
+      melodyLength: this.melodyLength,
+      drumLength: this.drumLength,
+      oscillatorType: this.oscillatorType,
+      noteLength: this.noteLength,
+      micSensitivity: this.micSensitivity,
+      motionSensitivity: this.motionSensitivity,
     };
   }
 
@@ -160,7 +224,8 @@ class AudioEngine {
   }
 
   public resetSession() {
-    this.melodyGrid = Array(8).fill(null).map(() => Array(8).fill(false));
+    this.pushUndo();
+    this.melodyGrid = Array(8).fill(null).map(() => Array(16).fill(false));
     this.drumGrid = Array(4).fill(null).map(() => Array(16).fill(false));
     this.drumMutes = [false, false, false, false];
     this.saveSession();
@@ -201,14 +266,14 @@ class AudioEngine {
     if (this.repeatEvent !== null) Tone.getTransport().clear(this.repeatEvent);
     
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
-      const melodyStep = this.currentStep % 8;
+      const melodyStep = this.currentStep % this.melodyLength;
       this.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) {
           this.triggerNoteAtTime(rowIndex, time);
         }
       });
 
-      const drumStep = this.currentStep % 16;
+      const drumStep = this.currentStep % this.drumLength;
       if (this.drumGrid[0][drumStep] && !this.drumMutes[0]) this.triggerDrum('hard', time); 
       if (this.drumGrid[1][drumStep] && !this.drumMutes[1]) this.triggerDrum('soft', time); 
       if (this.drumGrid[2][drumStep] && !this.drumMutes[2]) this.triggerDrum('roll', time); 
@@ -218,7 +283,7 @@ class AudioEngine {
         this.onStepListeners.forEach(listener => listener(this.currentStep));
       }, time);
 
-      this.currentStep = (this.currentStep + 1) % 16;
+      this.currentStep = (this.currentStep + 1) % 16; // Use 16 as the global master loop
     }, "16n");
   }
 
@@ -233,7 +298,8 @@ class AudioEngine {
 
   setBPM(bpm: number) {
     const clampedBpm = Math.max(40, Math.min(180, bpm));
-    Tone.getTransport().bpm.rampTo(clampedBpm, 1);
+    Tone.getTransport().bpm.rampTo(clampedBpm, 0.5);
+    this.saveSession();
   }
   getBPM() { return Tone.getTransport().bpm.value; }
 
@@ -273,32 +339,59 @@ class AudioEngine {
 
   getMelodyGrid() { return this.melodyGrid; }
   toggleMelody(row: number, col: number) { 
+    this.pushUndo();
     this.melodyGrid[row][col] = !this.melodyGrid[row][col]; 
     this.saveSession();
   }
   
   randomizeMelody() {
+    this.pushUndo();
     this.melodyGrid = this.melodyGrid.map(() => 
-      Array(8).fill(null).map(() => Math.random() > 0.85)
+      Array(16).fill(null).map(() => Math.random() > 0.85)
     );
     this.saveSession();
   }
 
   clearMelodyRow(row: number) {
-    this.melodyGrid[row] = Array(8).fill(false);
+    this.pushUndo();
+    this.melodyGrid[row] = Array(16).fill(false);
     this.saveSession();
   }
 
+  setMelodyLength(len: number) {
+    this.melodyLength = len;
+    this.saveSession();
+  }
+  getMelodyLength() { return this.melodyLength; }
+
   getDrumGrid() { return this.drumGrid; }
   toggleDrumStep(padIndex: number, stepIndex: number) { 
+    this.pushUndo();
     this.drumGrid[padIndex][stepIndex] = !this.drumGrid[padIndex][stepIndex]; 
     this.saveSession();
   }
 
+  randomizeDrums(row?: number) {
+    this.pushUndo();
+    if (row !== undefined) {
+      this.drumGrid[row] = Array(16).fill(null).map(() => Math.random() > 0.8);
+    } else {
+      this.drumGrid = this.drumGrid.map(() => Array(16).fill(null).map(() => Math.random() > 0.8));
+    }
+    this.saveSession();
+  }
+
   clearDrumRow(row: number) {
+    this.pushUndo();
     this.drumGrid[row] = Array(16).fill(false);
     this.saveSession();
   }
+
+  setDrumLength(len: number) {
+    this.drumLength = len;
+    this.saveSession();
+  }
+  getDrumLength() { return this.drumLength; }
 
   toggleDrumMute(index: number) {
     this.drumMutes[index] = !this.drumMutes[index];
@@ -343,11 +436,11 @@ class AudioEngine {
 
     notesToPlay.forEach(note => {
       if (this.mode === 'custom' && this.customPianoSampler) {
-        this.customPianoSampler.triggerAttackRelease(note, "4n", time);
+        this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
-        this.pianoSampler.triggerAttackRelease(note, "4n", time);
+        this.pianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else {
-        this.synth.triggerAttackRelease(note, "4n", time);
+        this.synth.triggerAttackRelease(note, this.noteLength, time);
       }
     });
   }
@@ -358,6 +451,24 @@ class AudioEngine {
     if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);
     if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);
   }
+
+  setOscillator(type: OscillatorType) {
+    this.oscillatorType = type;
+    this.synth.set({ oscillator: { type } });
+    this.saveSession();
+  }
+  getOscillator() { return this.oscillatorType; }
+
+  setNoteLength(len: NoteLength) {
+    this.noteLength = len;
+    this.saveSession();
+  }
+  getNoteLength() { return this.noteLength; }
+
+  setMicSensitivity(val: number) { this.micSensitivity = val; this.saveSession(); }
+  getMicSensitivity() { return this.micSensitivity; }
+  setMotionSensitivity(val: number) { this.motionSensitivity = val; this.saveSession(); }
+  getMotionSensitivity() { return this.motionSensitivity; }
 
   setCustomPiano(url: string) {
     if (this.customPianoSampler) this.customPianoSampler.dispose();

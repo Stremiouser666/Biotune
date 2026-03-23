@@ -7,8 +7,8 @@ import { Mascot } from '@/components/mascot';
 import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
-import { audioEngine, type AudioMode } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap } from 'lucide-react';
+import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -45,18 +45,20 @@ export default function BiotuneApp() {
   const [chordMode, setChordMode] = useState(false);
   const [activeSlot, setActiveSlot] = useState('A');
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
+  const [isLoaded, setIsLoaded] = useState(false);
   const tapTimes = useRef<number[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
     if (audioEngine) {
+      setIsLoaded(audioEngine.getIsLoaded());
       const handleHit = () => {
         setIsPulsing(true);
         setTimeout(() => setIsPulsing(false), 150);
       };
       audioEngine.addOnDrumHit(handleHit);
+      audioEngine.addOnLoad(setIsLoaded);
       
-      // Check for shared session in URL
       const params = new URLSearchParams(window.location.search);
       const sharedData = params.get('session');
       if (sharedData) {
@@ -72,9 +74,20 @@ export default function BiotuneApp() {
         }
       }
 
-      return () => audioEngine.removeOnDrumHit(handleHit);
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.code === 'Space' && step === 'dashboard') {
+          e.preventDefault();
+          handleTapTempo();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        audioEngine.removeOnDrumHit(handleHit);
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
-  }, []);
+  }, [step]);
 
   useEffect(() => {
     if (step !== 'dashboard') return;
@@ -95,7 +108,6 @@ export default function BiotuneApp() {
     }
   }, [step]);
 
-  // Sync accordion with onboarding steps
   useEffect(() => {
     if (onboardingStep === 0) setAccordionValue("biometrics");
     else if (onboardingStep === 1) setAccordionValue("melody");
@@ -159,6 +171,19 @@ export default function BiotuneApp() {
       toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: `No saved data in slot ${activeSlot}.` });
+    }
+  };
+
+  const handleUndo = () => {
+    const lastState = audioEngine?.undo();
+    if (lastState) {
+      setSessionVersion(v => v + 1);
+      setRootNote(lastState.rootNote || "C");
+      setBpm(lastState.bpm || 80);
+      setChordMode(!!lastState.chordMode);
+      toast({ title: "Action Undone", description: "Reverted to previous state." });
+    } else {
+      toast({ title: "Nothing to Undo", description: "History is empty." });
     }
   };
 
@@ -283,8 +308,36 @@ export default function BiotuneApp() {
                   <AccordionTrigger className="flex gap-4 px-6 py-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-md hover:no-underline">
                     <div className="flex items-center gap-3"><Activity className="w-5 h-5 text-primary" /><span className="font-headline text-black">BIOMETRIC SYNC</span></div>
                   </AccordionTrigger>
-                  <AccordionContent className="pt-4 px-2">
+                  <AccordionContent className="pt-4 px-2 space-y-6">
                     <BiometricMonitor onBreathingUpdate={setBreathingIntensity} />
+                    <div className="p-4 bg-white/20 rounded-2xl space-y-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between text-[10px] font-headline opacity-60 px-2">
+                          <span>MIC CALIBRATION</span>
+                          <span>{(audioEngine?.getMicSensitivity() || 1).toFixed(1)}x</span>
+                        </div>
+                        <Slider 
+                          defaultValue={[audioEngine?.getMicSensitivity() || 1]} 
+                          max={3} 
+                          min={0.1} 
+                          step={0.1} 
+                          onValueChange={([v]) => audioEngine?.setMicSensitivity(v)} 
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between text-[10px] font-headline opacity-60 px-2">
+                          <span>MOTION CALIBRATION</span>
+                          <span>{(audioEngine?.getMotionSensitivity() || 1).toFixed(1)}x</span>
+                        </div>
+                        <Slider 
+                          defaultValue={[audioEngine?.getMotionSensitivity() || 1]} 
+                          max={3} 
+                          min={0.1} 
+                          step={0.1} 
+                          onValueChange={([v]) => audioEngine?.setMotionSensitivity(v)} 
+                        />
+                      </div>
+                    </div>
                     {onboardingStep === 0 && (
                       <div className="mt-4 p-4 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-xs font-headline flex flex-col gap-3">
                         Connect your mic and movement to influence the loop's pulse!
@@ -341,18 +394,60 @@ export default function BiotuneApp() {
                   </AccordionTrigger>
                   <AccordionContent className="pt-4 px-2 space-y-4">
                     <div className="p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg space-y-6">
-                      <div className="flex flex-wrap gap-2 justify-center">
-                        {["C", "D", "E", "F", "G"].map(note => (
-                          <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); setSessionVersion(v => v + 1); }} className={cn("px-4 py-2 rounded-xl font-headline transition-all", rootNote === note ? "bg-primary text-white scale-110" : "bg-white/40")}>
-                            {note}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-headline opacity-60 text-center">ROOT KEY</div>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {["C", "D", "E", "F", "G"].map(note => (
+                            <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); setSessionVersion(v => v + 1); }} className={cn("px-4 py-2 rounded-xl font-headline transition-all", rootNote === note ? "bg-primary text-white scale-110" : "bg-white/40")}>
+                              {note}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-headline opacity-60 text-center">SYNTH WAVE</div>
+                          <div className="grid grid-cols-2 gap-1">
+                            {['sine', 'triangle', 'square', 'sawtooth'].map(type => (
+                              <button 
+                                key={type} 
+                                onClick={() => audioEngine?.setOscillator(type as OscillatorType)} 
+                                className={cn("py-1 text-[8px] rounded-md font-headline", audioEngine?.getOscillator() === type ? "bg-primary text-white" : "bg-white/40")}
+                              >
+                                {type.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-headline opacity-60 text-center">NOTE LENGTH</div>
+                          <div className="grid grid-cols-1 gap-1">
+                            {[
+                              { id: '16n', label: 'SHORT' },
+                              { id: '8n', label: 'MEDIUM' },
+                              { id: '4n', label: 'LONG' }
+                            ].map(({id, label}) => (
+                              <button 
+                                key={id} 
+                                onClick={() => audioEngine?.setNoteLength(id as NoteLength)} 
+                                className={cn("py-1 text-[8px] rounded-md font-headline", audioEngine?.getNoteLength() === id ? "bg-primary text-white" : "bg-white/40")}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-headline opacity-60">MODE</span>
-                        <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-6 py-2 bg-primary text-white rounded-xl font-headline text-xs">
-                          {audioMode.toUpperCase()}
-                        </button>
+                        <div className="flex gap-2">
+                          {!isLoaded && <span className="text-[8px] font-headline text-primary animate-pulse py-2">LOADING SAMPLES...</span>}
+                          <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-6 py-2 bg-primary text-white rounded-xl font-headline text-xs">
+                            {audioMode.toUpperCase()}
+                          </button>
+                        </div>
                       </div>
                       <Dialog>
                         <DialogTrigger asChild><button className="w-full py-4 bg-white/40 border border-primary/40 rounded-xl font-headline text-sm"><Wand2 className="w-5 h-5 inline mr-2" />CUSTOMIZE SAMPLES</button></DialogTrigger>
@@ -400,10 +495,21 @@ export default function BiotuneApp() {
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
                           <div className="text-4xl font-headline text-primary">{bpm.toFixed(0)}</div>
-                          <button onClick={handleTapTempo} className="flex items-center gap-2 px-3 py-1 bg-white/40 rounded-lg text-[10px] font-headline">
+                          <button onClick={handleTapTempo} className="flex items-center gap-2 px-3 py-1 bg-white/40 rounded-lg text-[10px] font-headline active:scale-90 transition-all">
                             <Timer className="w-3 h-3" /> TAP TEMPO
                           </button>
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-headline opacity-40 text-left">BPM SLIDER</div>
+                        <Slider 
+                          value={[bpm]} 
+                          max={180} 
+                          min={40} 
+                          step={1} 
+                          onValueChange={([val]) => { setBpm(val); audioEngine?.setBPM(val); }} 
+                        />
                       </div>
                       
                       <div className="space-y-6">
@@ -452,18 +558,22 @@ export default function BiotuneApp() {
                         </button>
                       ))}
                     </div>
-                    <div className="grid grid-cols-3 gap-4 p-4 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
-                      <button onClick={handleSaveSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
-                        <Save className="w-6 h-6 text-primary" />
-                        <span className="text-[10px] font-headline">SAVE</span>
+                    <div className="grid grid-cols-4 gap-2 p-4 bg-white/30 rounded-2xl border border-white/40 shadow-lg">
+                      <button onClick={handleUndo} className="flex flex-col items-center gap-2 p-3 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
+                        <Undo className="w-5 h-5 text-primary" />
+                        <span className="text-[8px] font-headline">UNDO</span>
                       </button>
-                      <button onClick={handleLoadSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
-                        <RotateCcw className="w-6 h-6 text-primary" />
-                        <span className="text-[10px] font-headline">LOAD</span>
+                      <button onClick={handleSaveSession} className="flex flex-col items-center gap-2 p-3 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
+                        <Save className="w-5 h-5 text-primary" />
+                        <span className="text-[8px] font-headline">SAVE</span>
                       </button>
-                      <button onClick={handleResetSession} className="flex flex-col items-center gap-2 p-4 bg-white/50 rounded-xl hover:bg-destructive/20 transition-all active:scale-95">
-                        <Trash2 className="w-6 h-6 text-destructive" />
-                        <span className="text-[10px] font-headline text-destructive">RESET</span>
+                      <button onClick={handleLoadSession} className="flex flex-col items-center gap-2 p-3 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
+                        <RotateCcw className="w-5 h-5 text-primary" />
+                        <span className="text-[8px] font-headline">LOAD</span>
+                      </button>
+                      <button onClick={handleResetSession} className="flex flex-col items-center gap-2 p-3 bg-white/50 rounded-xl hover:bg-destructive/20 transition-all active:scale-95">
+                        <Trash2 className="w-5 h-5 text-destructive" />
+                        <span className="text-[8px] font-headline text-destructive">RESET</span>
                       </button>
                     </div>
                   </AccordionContent>
