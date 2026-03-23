@@ -18,7 +18,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const [error, setError] = useState<string | null>(null);
   const [restingBpm, setRestingBpm] = useState(80);
 
-  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,13 +43,8 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const startMonitoring = async () => {
     try {
       setError(null);
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 64;
-      source.connect(analyserRef.current);
+      analyserRef.current = await audioEngine?.getMic() || null;
+      if (!analyserRef.current) throw new Error('Could not access microphone.');
 
       if (typeof DeviceMotionEvent !== 'undefined' && typeof (DeviceMotionEvent as any).requestPermission === 'function') {
         const permission = await (DeviceMotionEvent as any).requestPermission();
@@ -72,7 +66,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     setIsMonitoring(false);
     window.removeEventListener('devicemotion', handleMotion);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (audioContextRef.current) audioContextRef.current.close();
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
   };
 
@@ -99,7 +92,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     onBreathingUpdate?.(normalized);
     audioEngine?.setAmbience(normalized);
 
-    // History collection
     historyRef.current.push({ b: normalized, m: movementRef.current });
     if (historyRef.current.length > 200) historyRef.current.shift();
 
@@ -132,7 +124,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     ctx.clearRect(0, 0, 300, 60);
     ctx.lineWidth = 2;
     
-    ctx.strokeStyle = '#ff4dff66'; // Breathing
+    ctx.strokeStyle = '#ff4dff66';
     ctx.beginPath();
     historyRef.current.forEach((h, i) => {
       const x = (i / 200) * 300;
@@ -141,7 +133,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     });
     ctx.stroke();
 
-    ctx.strokeStyle = '#ffffff66'; // Motion
+    ctx.strokeStyle = '#ffffff66';
     ctx.beginPath();
     historyRef.current.forEach((h, i) => {
       const x = (i / 200) * 300;
@@ -160,9 +152,9 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       const base = audioEngine.getRestingBpm();
       let nextBpm = currentBpm;
 
-      if (avg < 0.3) nextBpm -= 1; 
-      else if (avg > 0.7) nextBpm += 1;
-      else if (Math.abs(currentBpm - base) > 0.5) nextBpm += (base - currentBpm) * 0.05; 
+      if (avg < 0.3) nextBpm -= 0.5; 
+      else if (avg > 0.7) nextBpm += 0.5;
+      else if (Math.abs(currentBpm - base) > 0.2) nextBpm += (base - currentBpm) * 0.05; 
       else nextBpm = base;
 
       audioEngine.setBPM(nextBpm, true);

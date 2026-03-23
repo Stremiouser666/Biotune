@@ -12,7 +12,7 @@ interface SceneData {
   drumGrid: boolean[][];
   melodyLength: number;
   drumLength: number;
-  pitchOffsets: number[]; // +/- semitones per row
+  pitchOffsets: number[];
 }
 
 interface SessionState {
@@ -37,30 +37,9 @@ interface SessionState {
 }
 
 const PRESETS: Record<string, Partial<SessionState>> = {
-  "LO-FI": {
-    bpm: 72,
-    reverbWet: 0.6,
-    delayWet: 0.4,
-    filterFrequency: 1200,
-    oscillatorType: 'triangle',
-    swingAmount: 0.2,
-  },
-  "AMBIENT": {
-    bpm: 60,
-    reverbWet: 0.8,
-    delayWet: 0.6,
-    filterFrequency: 800,
-    oscillatorType: 'sine',
-    noteLength: '4n',
-  },
-  "UPTEMPO": {
-    bpm: 124,
-    reverbWet: 0.2,
-    delayWet: 0.2,
-    filterFrequency: 15000,
-    oscillatorType: 'sawtooth',
-    noteLength: '16n',
-  }
+  "LO-FI": { bpm: 72, reverbWet: 0.6, delayWet: 0.4, filterFrequency: 1200, oscillatorType: 'triangle', swingAmount: 0.2 },
+  "AMBIENT": { bpm: 60, reverbWet: 0.8, delayWet: 0.6, filterFrequency: 800, oscillatorType: 'sine', noteLength: '4n' },
+  "UPTEMPO": { bpm: 124, reverbWet: 0.2, delayWet: 0.2, filterFrequency: 15000, oscillatorType: 'sawtooth', noteLength: '16n' }
 };
 
 class AudioEngine {
@@ -109,6 +88,9 @@ class AudioEngine {
   
   private midiAccess: MIDIAccess | null = null;
   private midiOutput: MIDIOutput | null = null;
+  
+  private micStream: MediaStream | null = null;
+  private micAnalyser: AnalyserNode | null = null;
 
   private onStepListeners: Set<(step: number) => void> = new Set();
   private onDrumHitListeners: Set<() => void> = new Set();
@@ -131,26 +113,45 @@ class AudioEngine {
       envelope: { attack: 0.1, release: 1.2, decay: 0.3, sustain: 0.4 }
     });
 
-    this.pianoSampler = new Tone.Sampler({
-      urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
-      baseUrl: "/samples/casio/",
-      onload: () => { this.isLoaded = true; this.onLoadListeners.forEach(l => l(true)); },
-      onerror: () => { this.pianoSampler?.set({ baseUrl: "https://tonejs.github.io/audio/casio/" }); }
-    }).connect(this.masterGain);
+    this.initSampler();
 
     this.drumPlayers = new Tone.Players({
       urls: { kick: "kick.mp3", snare: "snare.mp3", hat: "hihat.mp3" },
       baseUrl: "/samples/drums/",
     }).connect(this.masterGain);
 
-    if (typeof navigator !== 'undefined' && navigator.requestMIDIAccess) {
-      navigator.requestMIDIAccess().then(access => {
+    if (typeof navigator !== 'undefined' && (navigator as any).requestMIDIAccess) {
+      (navigator as any).requestMIDIAccess().then((access: any) => {
         this.midiAccess = access;
-        this.midiOutput = Array.from(access.outputs.values())[0] || null;
+        this.midiOutput = Array.from(access.outputs.values())[0] as any || null;
       });
     }
 
     this.loadSession();
+  }
+
+  private initSampler(useCDN = false) {
+    const baseUrl = useCDN ? "https://tonejs.github.io/audio/casio/" : "/samples/casio/";
+    if (this.pianoSampler) this.pianoSampler.dispose();
+    
+    this.pianoSampler = new Tone.Sampler({
+      urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
+      baseUrl,
+      onload: () => { this.isLoaded = true; this.onLoadListeners.forEach(l => l(true)); },
+      onerror: () => { if (!useCDN) this.initSampler(true); }
+    }).connect(this.masterGain);
+  }
+
+  public async getMic() {
+    if (this.micAnalyser) return this.micAnalyser;
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
+    this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const context = Tone.getContext().rawContext as AudioContext;
+    const source = context.createMediaStreamSource(this.micStream);
+    this.micAnalyser = context.createAnalyser();
+    this.micAnalyser.fftSize = 256;
+    source.connect(this.micAnalyser);
+    return this.micAnalyser;
   }
 
   public getIsLoaded() { return this.isLoaded; }
@@ -366,6 +367,8 @@ class AudioEngine {
     if (this.repeatEvent !== null) Tone.getTransport().clear(this.repeatEvent);
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
       const scene = this.scenes[this.activeSceneIndex];
+      const maxLen = Math.max(scene.melodyLength, scene.drumLength);
+      
       const melodyStep = this.currentStep % scene.melodyLength;
       scene.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) this.triggerNoteAtTime(rowIndex, time);
@@ -381,12 +384,13 @@ class AudioEngine {
         this.onStepListeners.forEach(listener => listener(this.currentStep));
       }, time);
 
-      this.currentStep = (this.currentStep + 1) % 16;
-      if (this.currentStep === 0 && this.isChaining) {
+      const nextStep = (this.currentStep + 1) % maxLen;
+      if (nextStep === 0 && this.isChaining) {
         Tone.Draw.schedule(() => {
           this.setScene((this.activeSceneIndex + 1) % 4);
         }, time);
       }
+      this.currentStep = nextStep;
     }, "16n");
   }
 
@@ -534,7 +538,7 @@ class AudioEngine {
   }
 
   private sendMidi(status: number, data1: number, data2: number) {
-    if (this.midiOutput) this.midiOutput.send([status, data1, data2]);
+    if (this.midiOutput) (this.midiOutput as any).send([status, data1, data2]);
   }
 
   setAmbience(intensity: number) {
@@ -565,10 +569,13 @@ class AudioEngine {
   }
 
   public exportMidi() {
-    const activeScene = this.scenes[this.activeSceneIndex];
-    console.log("Exporting active scene to MIDI...", activeScene);
-    // Simple alert for MVP context
-    alert("MIDI File generation initiated. Active patterns being encoded...");
+    const data = this.getSessionData(true);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `biotune-pattern-${Date.now()}.json`;
+    a.click();
   }
 }
 

@@ -17,6 +17,7 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   const [currentNotes, setCurrentNotes] = useState<string[]>([]);
   const [patternLength, setPatternLength] = useState(8);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
 
   useEffect(() => {
     if (audioEngine) {
@@ -26,14 +27,22 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
       setPatternLength(audioEngine.getMelodyLength());
       const handleStep = (step: number) => setCurrentStep(step % audioEngine.getMelodyLength());
       audioEngine.addOnStep(handleStep);
-      return () => audioEngine.removeOnStep(handleStep);
+      return () => {
+        audioEngine.removeOnStep(handleStep);
+      };
     }
   }, [sessionVersion]);
 
   const toggleCell = (row: number, col: number) => {
+    if (isLongPress.current) {
+      isLongPress.current = false;
+      return;
+    }
     audioEngine?.toggleMelody(row, col);
     setGrid([...audioEngine!.getMelodyGrid().map(r => [...r])]);
-    if (!grid[row][col]) audioEngine?.triggerNote(row);
+    if (audioEngine?.getMelodyGrid()[row][col]) {
+      audioEngine?.triggerNote(row);
+    }
   };
 
   const adjustPitch = (row: number, delta: number) => {
@@ -53,14 +62,22 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   };
 
   const startLongPress = (rowIdx: number) => {
+    isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
       audioEngine?.clearMelodyRow(rowIdx);
       setGrid([...audioEngine!.getMelodyGrid().map(r => [...r])]);
     }, 600);
   };
 
-  const cancelLongPress = () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); };
-  const updateLength = (len: number) => { setPatternLength(len); audioEngine?.setMelodyLength(len); };
+  const cancelLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  const updateLength = (len: number) => {
+    setPatternLength(len);
+    audioEngine?.setMelodyLength(len);
+  };
 
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -75,7 +92,7 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
           {grid.map((row, rowIndex) => (
             <div key={rowIndex} className="flex gap-1 h-10">
               <div className="flex flex-col items-center justify-center bg-white/10 rounded-l-md w-16 select-none shrink-0 border-r border-black/5">
-                <span className="text-[8px] font-headline opacity-50 mb-0.5">{currentNotes[rowIndex]}</span>
+                <span className="text-[8px] font-headline opacity-50 mb-0.5">{currentNotes[rowIndex] || "-"}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => adjustPitch(rowIndex, -1)} className="p-0.5 hover:bg-white/20 rounded"><Minus className="w-2.5 h-2.5 opacity-40" /></button>
                   <span className={cn("text-[7px] font-headline", (offsets[rowIndex] || 0) !== 0 ? "text-primary" : "opacity-30")}>
@@ -87,9 +104,10 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
               {row.slice(0, patternLength).map((active, colIndex) => (
                 <button
                   key={colIndex}
-                  onClick={() => toggleCell(rowIndex, colIndex)}
                   onPointerDown={() => startLongPress(rowIndex)}
                   onPointerUp={cancelLongPress}
+                  onPointerLeave={cancelLongPress}
+                  onClick={() => toggleCell(rowIndex, colIndex)}
                   className={cn(
                     "flex-1 rounded-sm transition-all border border-black/5",
                     active ? "bg-primary shadow-[0_0_15px_#ff4dff66]" : "bg-white/20 hover:bg-white/40",

@@ -4,7 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mascot } from '@/components/mascot';
 import { audioEngine } from '@/lib/audio-engine';
-import { Minimize2, Mic, Activity, Music, Sparkles, Moon } from 'lucide-react';
+import { Minimize2, Music, Activity, Sparkles, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FullscreenVisualizerProps {
@@ -25,10 +25,8 @@ interface Particle {
 export function FullscreenVisualizer({ onClose, breathingIntensity }: FullscreenVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
-  const [isMicActive, setIsMicActive] = useState(false);
   const [isStrobing, setIsStrobing] = useState(false);
   const [isAmbient, setIsAmbient] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -42,28 +40,20 @@ export function FullscreenVisualizer({ onClose, breathingIntensity }: Fullscreen
     };
     audioEngine?.addOnStep(handleStep);
     audioEngine?.addOnDrumHit(handleDrumHit);
-    startMic();
+    
+    // Connect to central mic analyser
+    const connectMic = async () => {
+      analyserRef.current = await audioEngine?.getMic() || null;
+      if (analyserRef.current) draw();
+    };
+    connectMic();
+
     return () => {
       audioEngine?.removeOnStep(handleStep);
       audioEngine?.removeOnDrumHit(handleDrumHit);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);
-
-  const startMic = async () => {
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) return;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 512;
-      source.connect(analyserRef.current);
-      setIsMicActive(true);
-      draw();
-    } catch (err) { console.error("Visualizer mic error:", err); }
-  };
 
   const spawnBurst = () => {
     if (!canvasRef.current) return;
@@ -112,11 +102,9 @@ export function FullscreenVisualizer({ onClose, breathingIntensity }: Fullscreen
     // Grid Matrices (Background)
     if (!isAmbient) {
       const melodyGrid = audioEngine?.getMelodyGrid() || [];
-      const drumGrid = audioEngine?.getDrumGrid() || [];
       const cellSize = 12;
       const gap = 6;
       
-      // Melody Grid Background
       ctx.globalAlpha = 0.15;
       melodyGrid.forEach((row, r) => {
         row.forEach((active, c) => {

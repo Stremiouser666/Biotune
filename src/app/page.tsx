@@ -9,34 +9,18 @@ import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { FullscreenVisualizer } from '@/components/fullscreen-visualizer';
 import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2, FileJson, Link, Moon } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2, Link, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Toaster } from "@/components/ui/toaster";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
@@ -60,6 +44,7 @@ export default function BiotuneApp() {
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
   const [isLoaded, setIsLoaded] = useState(false);
   const tapTimes = useRef<number[]>([]);
+  const sceneLongPressTimer = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -80,7 +65,7 @@ export default function BiotuneApp() {
         console.error("Failed to parse shared session", e);
       }
     }
-  }, []);
+  }, []); // Only once on mount
 
   useEffect(() => {
     if (audioEngine) {
@@ -127,7 +112,10 @@ export default function BiotuneApp() {
 
   useEffect(() => {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
-    if (step === 'dashboard' && isFirstTime) setOnboardingStep(0);
+    if (step === 'dashboard' && isFirstTime) {
+      setOnboardingStep(0);
+      localStorage.setItem('biotune_onboarded', 'true');
+    }
   }, [step]);
 
   useEffect(() => {
@@ -168,15 +156,6 @@ export default function BiotuneApp() {
     setIsPlaying(false);
     setStep('intro');
     setIsFullscreen(false);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    if (type === 'piano') audioEngine?.setCustomPiano(url);
-    else audioEngine?.setCustomDrums(type as any, url);
-    toast({ title: "Sample Imported", description: `${type.toUpperCase()} customized!` });
   };
 
   const handleSaveSession = () => {
@@ -264,12 +243,22 @@ export default function BiotuneApp() {
 
   const handleMidiExport = () => {
     audioEngine?.exportMidi();
-    toast({ title: "MIDI Exported", description: "Pattern data prepared." });
+    toast({ title: "Pattern Exported", description: "Loop data prepared for DAW." });
   };
 
   const handleCopyScene = (to: number) => {
     audioEngine?.copyScene(activeScene, to);
     toast({ title: "Scene Copied", description: `Scene ${activeScene+1} -> ${to+1}` });
+  };
+
+  const startSceneLongPress = (idx: number) => {
+    sceneLongPressTimer.current = setTimeout(() => {
+      handleCopyScene(idx);
+    }, 600);
+  };
+
+  const stopSceneLongPress = () => {
+    if (sceneLongPressTimer.current) clearTimeout(sceneLongPressTimer.current);
   };
 
   return (
@@ -366,6 +355,9 @@ export default function BiotuneApp() {
                         {[0, 1, 2, 3].map(idx => (
                           <div key={idx} className="flex-1 flex flex-col gap-1">
                             <button 
+                              onPointerDown={() => startSceneLongPress(idx)}
+                              onPointerUp={stopSceneLongPress}
+                              onPointerLeave={stopSceneLongPress}
                               onClick={() => audioEngine?.setScene(idx)}
                               onContextMenu={(e) => { e.preventDefault(); handleCopyScene(idx); }}
                               className={cn(
@@ -467,7 +459,7 @@ export default function BiotuneApp() {
                         <span className="text-[10px] font-headline opacity-60">SAMPLES</span>
                         <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-4 py-1.5 bg-primary text-white rounded-lg font-headline text-[9px] min-w-[70px]">{audioMode.toUpperCase()}</button>
                       </div>
-                      <button onClick={handleMidiExport} className="w-full py-2.5 bg-white/40 border border-primary/40 rounded-xl font-headline text-[10px] flex items-center justify-center gap-2"><Link className="w-3 h-3" /> EXPORT MIDI PATTERN</button>
+                      <button onClick={handleMidiExport} className="w-full py-2.5 bg-white/40 border border-primary/40 rounded-xl font-headline text-[10px] flex items-center justify-center gap-2"><Link className="w-3 h-3" /> EXPORT PATTERN DATA</button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -558,7 +550,6 @@ export default function BiotuneApp() {
           )}
         </div>
       </div>
-      <Toaster />
     </main>
   );
 }

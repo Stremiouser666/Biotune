@@ -23,6 +23,7 @@ export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [patternLength, setPatternLength] = useState(16);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
 
   useEffect(() => {
     if (audioEngine) {
@@ -46,14 +47,20 @@ export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
   };
 
   const startLongPress = (padIdx: number) => {
+    isLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
       audioEngine?.clearDrumRow(padIdx);
       setGrid([...audioEngine!.getDrumGrid().map(r => [...r])]);
     }, 600);
   };
 
-  const cancelLongPress = () => {
+  const stopLongPress = (padType: 'hard' | 'soft' | 'roll') => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (!isLongPress.current) {
+      audioEngine?.triggerDrum(padType);
+    }
+    isLongPress.current = false;
   };
 
   const updateLength = (len: number) => {
@@ -91,9 +98,8 @@ export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
           <div className="flex items-center gap-2">
             <button
               onPointerDown={() => startLongPress(padIdx)}
-              onPointerUp={cancelLongPress}
-              onPointerLeave={cancelLongPress}
-              onClick={() => audioEngine?.triggerDrum(pad.type)}
+              onPointerUp={() => stopLongPress(pad.type)}
+              onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
               className="px-6 py-2 bg-white/40 rounded-xl font-headline text-xs hover:bg-white/60 active:scale-95 transition-all select-none min-w-[80px]"
             >
               {pad.label}
