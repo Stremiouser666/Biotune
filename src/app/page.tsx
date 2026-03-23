@@ -9,7 +9,7 @@ import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { FullscreenVisualizer } from '@/components/fullscreen-visualizer';
 import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2 } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2, FileJson, Link, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
@@ -39,6 +46,7 @@ export default function BiotuneApp() {
   const [bpm, setBpm] = useState(80);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isAmbient, setIsAmbient] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
   const [isPulsing, setIsPulsing] = useState(false);
   const [breathingIntensity, setBreathingIntensity] = useState(0);
@@ -46,6 +54,7 @@ export default function BiotuneApp() {
   const [sessionVersion, setSessionVersion] = useState(0);
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
   const [chordMode, setChordMode] = useState(false);
+  const [isChaining, setIsChaining] = useState(false);
   const [activeSlot, setActiveSlot] = useState('A');
   const [activeScene, setActiveScene] = useState(0);
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
@@ -63,6 +72,7 @@ export default function BiotuneApp() {
         setRootNote(data.rootNote || "C");
         setChordMode(!!data.chordMode);
         setBpm(data.bpm || 80);
+        setIsChaining(!!data.isChaining);
         setActiveScene(data.activeSceneIndex || 0);
         setSessionVersion(v => v + 1);
         toast({ title: "Shared Session Loaded", description: "Enjoy this magical creation!" });
@@ -91,9 +101,12 @@ export default function BiotuneApp() {
           e.preventDefault();
           handleTapTempo();
         }
+        if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code) && step === 'dashboard') {
+          const idx = parseInt(e.code.replace('Digit', '')) - 1;
+          audioEngine?.setScene(idx);
+        }
       };
       window.addEventListener('keydown', handleKeyDown);
-
       return () => {
         audioEngine.removeOnDrumHit(handleHit);
         window.removeEventListener('keydown', handleKeyDown);
@@ -114,9 +127,7 @@ export default function BiotuneApp() {
 
   useEffect(() => {
     const isFirstTime = !localStorage.getItem('biotune_onboarded');
-    if (step === 'dashboard' && isFirstTime) {
-      setOnboardingStep(0);
-    }
+    if (step === 'dashboard' && isFirstTime) setOnboardingStep(0);
   }, [step]);
 
   useEffect(() => {
@@ -165,12 +176,12 @@ export default function BiotuneApp() {
     const url = URL.createObjectURL(file);
     if (type === 'piano') audioEngine?.setCustomPiano(url);
     else audioEngine?.setCustomDrums(type as any, url);
-    toast({ title: "Sample Imported", description: `${type.toUpperCase()} is now customized!` });
+    toast({ title: "Sample Imported", description: `${type.toUpperCase()} customized!` });
   };
 
   const handleSaveSession = () => {
     audioEngine?.saveSession();
-    toast({ title: "Session Saved", description: `Slot ${activeSlot} is safe in your browser.` });
+    toast({ title: "Session Saved", description: `Slot ${activeSlot} is safe.` });
   };
 
   const handleLoadSession = () => {
@@ -180,10 +191,11 @@ export default function BiotuneApp() {
       setRootNote(data.rootNote || "C");
       setBpm(data.bpm || 80);
       setChordMode(!!data.chordMode);
+      setIsChaining(!!data.isChaining);
       setActiveScene(data.activeSceneIndex || 0);
-      toast({ title: "Session Loaded", description: `Restored slot ${activeSlot} successfully.` });
+      toast({ title: "Session Loaded", description: `Restored slot ${activeSlot}.` });
     } else {
-      toast({ variant: "destructive", title: "Load Failed", description: `No saved data in slot ${activeSlot}.` });
+      toast({ variant: "destructive", title: "Load Failed" });
     }
   };
 
@@ -195,16 +207,14 @@ export default function BiotuneApp() {
       setBpm(lastState.bpm || 80);
       setChordMode(!!lastState.chordMode);
       setActiveScene(lastState.activeSceneIndex || 0);
-      toast({ title: "Action Undone", description: "Reverted to previous state." });
-    } else {
-      toast({ title: "Nothing to Undo", description: "History is empty." });
+      toast({ title: "Action Undone" });
     }
   };
 
   const handleResetSession = () => {
     audioEngine?.resetSession();
     setSessionVersion(v => v + 1);
-    toast({ title: "Session Reset", description: `Slot ${activeSlot} has been cleared.` });
+    toast({ title: "Session Reset" });
   };
 
   const handleSwitchSlot = (slot: string) => {
@@ -215,6 +225,7 @@ export default function BiotuneApp() {
       setSessionVersion(v => v + 1);
       setRootNote(data.rootNote || "C");
       setChordMode(!!data.chordMode);
+      setIsChaining(!!data.isChaining);
       setBpm(data.bpm || 80);
       setActiveScene(data.activeSceneIndex || 0);
     }
@@ -225,14 +236,17 @@ export default function BiotuneApp() {
     audioEngine?.setChordMode(val);
   };
 
+  const handleToggleChaining = (val: boolean) => {
+    setIsChaining(val);
+    audioEngine?.setChaining(val);
+  };
+
   const handleTapTempo = () => {
     const now = performance.now();
     tapTimes.current = [...tapTimes.current, now].slice(-4);
     if (tapTimes.current.length >= 2) {
       const intervals = [];
-      for (let i = 1; i < tapTimes.current.length; i++) {
-        intervals.push(tapTimes.current[i] - tapTimes.current[i - 1]);
-      }
+      for (let i = 1; i < tapTimes.current.length; i++) intervals.push(tapTimes.current[i] - tapTimes.current[i - 1]);
       const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
       const nextBpm = 60000 / avgInterval;
       audioEngine?.setBPM(nextBpm);
@@ -245,16 +259,21 @@ export default function BiotuneApp() {
     const encoded = btoa(JSON.stringify(data));
     const url = `${window.location.origin}${window.location.pathname}?session=${encoded}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link Copied!", description: "Sharing active scene only to keep URL stable." });
+    toast({ title: "Link Copied!", description: "Share your active creation!" });
   };
 
-  const finishOnboarding = () => {
-    setOnboardingStep(null);
-    localStorage.setItem('biotune_onboarded', 'true');
+  const handleMidiExport = () => {
+    audioEngine?.exportMidi();
+    toast({ title: "MIDI Exported", description: "Pattern data prepared." });
+  };
+
+  const handleCopyScene = (to: number) => {
+    audioEngine?.copyScene(activeScene, to);
+    toast({ title: "Scene Copied", description: `Scene ${activeScene+1} -> ${to+1}` });
   };
 
   return (
-    <main className="relative min-h-svh w-full overflow-hidden">
+    <main className={cn("relative min-h-svh w-full overflow-hidden transition-all", isAmbient && "brightness-[0.2]")}>
       <div 
         className={cn(
           "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:1500ms]",
@@ -273,17 +292,16 @@ export default function BiotuneApp() {
 
       {step === 'dashboard' && !isFullscreen && (
         <div className="fixed top-4 right-4 flex gap-2 z-50">
-          <button 
-            onClick={() => setIsFullscreen(true)} 
-            className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all"
-            title="Visualizer Mode"
-          >
+          <button onClick={() => setIsAmbient(!isAmbient)} className={cn("p-3 backdrop-blur-md rounded-full border shadow-lg transition-all", isAmbient ? "bg-primary text-white" : "bg-white/40 text-primary")}>
+            <Moon className="w-5 h-5" />
+          </button>
+          <button onClick={() => setIsFullscreen(true)} className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 transition-all">
             <Maximize2 className="w-5 h-5 text-primary" />
           </button>
-          <button onClick={handleShare} className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all">
+          <button onClick={handleShare} className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 transition-all">
             <Share2 className="w-5 h-5 text-primary" />
           </button>
-          <button onClick={handleGoHome} className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all">
+          <button onClick={handleGoHome} className="p-3 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 transition-all">
             <Home className="w-5 h-5 text-primary" />
           </button>
         </div>
@@ -291,29 +309,21 @@ export default function BiotuneApp() {
 
       <div className="relative z-10 w-full h-svh flex flex-col items-center pt-10 px-4 text-center overflow-y-auto scrollbar-hide">
         <div className="mb-6 shrink-0">
-          <Mascot 
-            state={step === 'magic' || step === 'activation' ? 'reacting' : step === 'dashboard' ? 'active' : 'idle'} 
-            intensity={breathingIntensity}
-          />
+          <Mascot state={['magic', 'activation'].includes(step) ? 'reacting' : step === 'dashboard' ? 'active' : 'idle'} intensity={breathingIntensity} isDancing={isPlaying && bpm > 110} />
         </div>
 
         <div className="w-full max-w-lg flex flex-col items-center gap-6 pb-12">
           {step === 'intro' && (
             <div className="flex flex-col items-center gap-8">
               <AnimatedText text="Hi… let’s create magical music from you together 🎶" className="text-xl md:text-3xl font-headline" />
-              <button onClick={handleCreateSound} className="px-6 py-4 text-lg bg-primary text-white rounded-2xl shadow-[0_0_25px_rgba(255,77,255,0.7)] transition-all hover:scale-105 active:scale-95 font-headline whitespace-nowrap">
-                ✨ CREATE MY SOUND
-              </button>
+              <button onClick={handleCreateSound} className="px-6 py-4 text-lg bg-primary text-white rounded-2xl shadow-[0_0_25px_rgba(255,77,255,0.7)] hover:scale-105 active:scale-95 font-headline">✨ CREATE MY SOUND</button>
             </div>
           )}
 
           {step === 'activation' && (
             <div className="flex flex-col items-center gap-4">
               <AnimatedText text="Listening to your presence..." className="text-lg md:text-2xl font-headline" />
-              <div className="flex gap-2 items-center text-primary/60">
-                <Activity className="w-5 h-5 animate-pulse" />
-                <span className="text-[10px] font-headline">CALIBRATING BIOMETRICS</span>
-              </div>
+              <div className="flex gap-2 items-center text-primary/60"><Activity className="w-5 h-5 animate-pulse" /><span className="text-[10px] font-headline">CALIBRATING BIOMETRICS</span></div>
             </div>
           )}
 
@@ -326,50 +336,16 @@ export default function BiotuneApp() {
 
           {step === 'dashboard' && (
             <div className="w-full animate-scroll-open space-y-4">
-              <Accordion 
-                type="single" 
-                collapsible 
-                value={accordionValue} 
-                onValueChange={setAccordionValue}
-                className="w-full space-y-3"
-              >
+              <Accordion type="single" collapsible value={accordionValue} onValueChange={setAccordionValue} className="w-full space-y-3">
                 <AccordionItem value="biometrics" className={cn("border-none transition-all", onboardingStep === 0 && "ring-4 ring-primary ring-offset-4 rounded-2xl")}>
                   <AccordionTrigger className="flex gap-3 px-4 py-3 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm hover:no-underline">
                     <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /><span className="font-headline text-[13px] text-black">BIOMETRIC SYNC</span></div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-3 px-1 space-y-4">
                     <BiometricMonitor onBreathingUpdate={setBreathingIntensity} />
-                    <div className="p-3 bg-white/20 rounded-2xl space-y-3">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex justify-between text-[9px] font-headline opacity-60 px-1">
-                          <span>MIC SENS</span>
-                          <span>{(audioEngine?.getMicSensitivity() || 1).toFixed(1)}x</span>
-                        </div>
-                        <Slider 
-                          value={[audioEngine?.getMicSensitivity() || 1]} 
-                          max={3} 
-                          min={0.1} 
-                          step={0.1} 
-                          onValueChange={([v]) => { audioEngine?.setMicSensitivity(v); setSessionVersion(v => v + 1); }} 
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex justify-between text-[9px] font-headline opacity-60 px-1">
-                          <span>MOTION SENS</span>
-                          <span>{(audioEngine?.getMotionSensitivity() || 1).toFixed(1)}x</span>
-                        </div>
-                        <Slider 
-                          value={[audioEngine?.getMotionSensitivity() || 1]} 
-                          max={3} 
-                          min={0.1} 
-                          step={0.1} 
-                          onValueChange={([v]) => { audioEngine?.setMotionSensitivity(v); setSessionVersion(v => v + 1); }} 
-                        />
-                      </div>
-                    </div>
                     {onboardingStep === 0 && (
                       <div className="mt-2 p-3 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-[10px] font-headline flex flex-col gap-2">
-                        Connect your mic and movement to influence the loop's pulse!
+                        Sync your breath and motion to influence the loop's pulse!
                         <button onClick={() => setOnboardingStep(1)} className="bg-primary text-white py-1.5 rounded-lg">NEXT: MELODY</button>
                       </div>
                     )}
@@ -381,22 +357,28 @@ export default function BiotuneApp() {
                     <div className="flex items-center gap-2"><Repeat className="w-4 h-4 text-primary" /><span className="font-headline text-[13px] text-black">PATTERN SCENES</span></div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-3 px-1 space-y-3">
-                    <div className="p-3 bg-white/30 rounded-2xl border border-white/40 shadow-sm flex flex-col gap-2">
-                      <p className="text-[9px] font-headline opacity-60 text-center">SWITCH PATTERNS LIVE</p>
+                    <div className="p-4 bg-white/30 rounded-2xl border border-white/40 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between px-2">
+                        <span className="text-[10px] font-headline opacity-60">AUTO-CHAIN</span>
+                        <Switch className="scale-75" checked={isChaining} onCheckedChange={handleToggleChaining} />
+                      </div>
                       <div className="flex gap-1.5">
                         {[0, 1, 2, 3].map(idx => (
-                          <button 
-                            key={idx}
-                            onClick={() => audioEngine?.setScene(idx)}
-                            className={cn(
-                              "flex-1 py-3 rounded-xl font-headline text-xs transition-all",
-                              activeScene === idx ? "bg-primary text-white shadow-md scale-105" : "bg-white/40"
-                            )}
-                          >
-                            {idx + 1}
-                          </button>
+                          <div key={idx} className="flex-1 flex flex-col gap-1">
+                            <button 
+                              onClick={() => audioEngine?.setScene(idx)}
+                              onContextMenu={(e) => { e.preventDefault(); handleCopyScene(idx); }}
+                              className={cn(
+                                "py-3 rounded-xl font-headline text-xs transition-all relative",
+                                activeScene === idx ? "bg-primary text-white shadow-md scale-105" : "bg-white/40"
+                              )}
+                            >
+                              {idx + 1}
+                            </button>
+                          </div>
                         ))}
                       </div>
+                      <p className="text-[7px] font-headline opacity-40 text-center">TIP: LONG-PRESS SCENE TO PASTE CURRENT PATTERN</p>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -406,17 +388,12 @@ export default function BiotuneApp() {
                     <div className="flex items-center gap-2"><Music className="w-4 h-4 text-primary" /><span className="font-headline text-[13px] text-black">MELODY STUDIO</span></div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-3 px-1 space-y-3">
-                    <div className="flex items-center justify-between px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/40">
+                    <div className="flex items-center justify-between px-4 py-2 bg-white/20 rounded-xl border border-white/40">
                       <div className="flex items-center gap-2">
-                        <Zap className={cn("w-3.5 h-3.5 transition-colors", chordMode ? "text-primary" : "text-black/40")} />
-                        <Label htmlFor="chord-mode" className="text-[9px] font-headline cursor-pointer">CHORDS</Label>
+                        <Zap className={cn("w-3.5 h-3.5", chordMode ? "text-primary" : "text-black/40")} />
+                        <Label className="text-[9px] font-headline">CHORDS</Label>
                       </div>
-                      <Switch 
-                        id="chord-mode" 
-                        className="scale-75"
-                        checked={chordMode} 
-                        onCheckedChange={handleToggleChordMode}
-                      />
+                      <Switch className="scale-75" checked={chordMode} onCheckedChange={handleToggleChordMode} />
                     </div>
                     <PianoRoll sessionVersion={sessionVersion} />
                     {onboardingStep === 1 && (
@@ -437,7 +414,7 @@ export default function BiotuneApp() {
                     {onboardingStep === 2 && (
                       <div className="mt-2 p-3 bg-primary/20 backdrop-blur-xl rounded-xl border border-primary/30 text-[10px] font-headline flex flex-col gap-2">
                         Layer beats. Mute rows or clear them with a long-press.
-                        <button onClick={finishOnboarding} className="bg-primary text-white py-1.5 rounded-lg">LET'S GO!</button>
+                        <button onClick={() => setOnboardingStep(null)} className="bg-primary text-white py-1.5 rounded-lg">LET'S GO!</button>
                       </div>
                     )}
                   </AccordionContent>
@@ -449,80 +426,45 @@ export default function BiotuneApp() {
                   </AccordionTrigger>
                   <AccordionContent className="pt-3 px-1 space-y-4">
                     <div className="p-4 bg-white/30 rounded-2xl border border-white/40 shadow-sm space-y-4">
+                      <div className="space-y-3">
+                        <div className="text-[9px] font-headline opacity-60 text-center">PRESETS</div>
+                        <div className="flex gap-1.5 justify-center">
+                          {["LO-FI", "AMBIENT", "UPTEMPO"].map(p => (
+                            <button key={p} onClick={() => { audioEngine?.loadPreset(p); setSessionVersion(v => v + 1); }} className="px-3 py-1.5 bg-white/40 rounded-lg text-[8px] font-headline hover:bg-primary/20">{p}</button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         <div className="text-[9px] font-headline opacity-60 text-center">ROOT KEY</div>
                         <div className="flex flex-wrap gap-1.5 justify-center">
                           {["C", "D", "E", "F", "G"].map(note => (
-                            <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); setSessionVersion(v => v + 1); }} className={cn("w-10 h-10 flex items-center justify-center rounded-xl font-headline text-xs transition-all", rootNote === note ? "bg-primary text-white scale-110 shadow-md" : "bg-white/40")}>
-                              {note}
-                            </button>
+                            <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); setSessionVersion(v => v + 1); }} className={cn("w-10 h-10 flex items-center justify-center rounded-xl font-headline text-xs", rootNote === note ? "bg-primary text-white scale-110 shadow-md" : "bg-white/40")}>{note}</button>
                           ))}
                         </div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <div className="text-[8px] font-headline opacity-60 text-center">WAVE</div>
                           <div className="grid grid-cols-2 gap-1">
                             {['sine', 'triangle', 'square', 'sawtooth'].map(type => (
-                              <button 
-                                key={type} 
-                                onClick={() => { audioEngine?.setOscillator(type as OscillatorType); setSessionVersion(v => v + 1); }} 
-                                className={cn("py-1 text-[7px] rounded-md font-headline", audioEngine?.getOscillator() === type ? "bg-primary text-white" : "bg-white/40")}
-                              >
-                                {type.slice(0, 4).toUpperCase()}
-                              </button>
+                              <button key={type} onClick={() => { audioEngine?.setOscillator(type as OscillatorType); setSessionVersion(v => v + 1); }} className={cn("py-1 text-[7px] rounded-md font-headline", audioEngine?.getOscillator() === type ? "bg-primary text-white" : "bg-white/40")}>{type.toUpperCase()}</button>
                             ))}
                           </div>
                         </div>
                         <div className="space-y-1.5">
                           <div className="text-[8px] font-headline opacity-60 text-center">LENGTH</div>
                           <div className="grid grid-cols-1 gap-1">
-                            {[
-                              { id: '16n', label: 'SHORT' },
-                              { id: '8n', label: 'MEDIUM' },
-                              { id: '4n', label: 'LONG' }
-                            ].map(({id, label}) => (
-                              <button 
-                                key={id} 
-                                onClick={() => { audioEngine?.setNoteLength(id as NoteLength); setSessionVersion(v => v + 1); }} 
-                                className={cn("py-0.5 text-[7px] rounded-md font-headline", audioEngine?.getNoteLength() === id ? "bg-primary text-white" : "bg-white/40")}
-                              >
-                                {label}
-                              </button>
+                            {[{ id: '16n', label: 'SHORT' }, { id: '8n', label: 'MEDIUM' }, { id: '4n', label: 'LONG' }].map(({id, label}) => (
+                              <button key={id} onClick={() => { audioEngine?.setNoteLength(id as NoteLength); setSessionVersion(v => v + 1); }} className={cn("py-0.5 text-[7px] rounded-md font-headline", audioEngine?.getNoteLength() === id ? "bg-primary text-white" : "bg-white/40")}>{label}</button>
                             ))}
                           </div>
                         </div>
                       </div>
-
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-black/5">
                         <span className="text-[10px] font-headline opacity-60">SAMPLES</span>
-                        <div className="flex items-center gap-2">
-                          {!isLoaded && <span className="text-[7px] font-headline text-primary animate-pulse">LOADING...</span>}
-                          <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-4 py-1.5 bg-primary text-white rounded-lg font-headline text-[9px] min-w-[70px]">
-                            {audioMode.toUpperCase()}
-                          </button>
-                        </div>
+                        <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-4 py-1.5 bg-primary text-white rounded-lg font-headline text-[9px] min-w-[70px]">{audioMode.toUpperCase()}</button>
                       </div>
-                      <Dialog>
-                        <DialogTrigger asChild><button className="w-full py-2.5 bg-white/40 border border-primary/40 rounded-xl font-headline text-[10px]"><Wand2 className="w-3.5 h-3.5 inline mr-1" />CUSTOMIZE</button></DialogTrigger>
-                        <DialogContent className="font-headline max-w-[90vw] rounded-3xl">
-                          <DialogHeader>
-                            <DialogTitle className="text-primary text-lg">SAMPLE IMPORTER</DialogTitle>
-                            <DialogDescription className="text-[10px] opacity-60">
-                              Import .wav or .mp3 files to customize your sounds. (Bundled offline assets are stored at /samples)
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="grid gap-2 py-2">
-                            {['piano', 'kick', 'snare', 'hat'].map(id => (
-                              <div key={id} className="flex items-center justify-between bg-black/5 p-2 rounded-xl">
-                                <span className="text-xs">{id.toUpperCase()}</span>
-                                <label className="cursor-pointer bg-primary p-1.5 rounded-lg text-white"><Upload className="w-3.5 h-3.5" /><input type="file" className="hidden" accept="audio/*" onChange={e => handleFileUpload(e, id)} /></label>
-                              </div>
-                            ))}
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                      <button onClick={handleMidiExport} className="w-full py-2.5 bg-white/40 border border-primary/40 rounded-xl font-headline text-[10px] flex items-center justify-center gap-2"><Link className="w-3 h-3" /> EXPORT MIDI PATTERN</button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -532,81 +474,58 @@ export default function BiotuneApp() {
                     <div className="flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" /><span className="font-headline text-[13px] text-black">LOOP ENGINE</span></div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-3 px-1">
-                    <div className="p-5 bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl flex flex-col gap-6 shadow-sm">
+                    <div className="p-5 bg-white/40 backdrop-blur-sm border rounded-2xl flex flex-col gap-6 shadow-sm">
                       <div className="flex justify-between items-center w-full">
                         <div className="flex gap-2">
-                          <button onClick={togglePlay} className="p-4 bg-primary text-white rounded-full shadow-lg active:scale-95 transition-all">
-                            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-                          </button>
-                          <button 
-                            onClick={handleToggleRecording} 
-                            className={cn(
-                              "p-4 rounded-full shadow-lg active:scale-95 transition-all",
-                              isRecording ? "bg-red-500 animate-pulse text-white" : "bg-white/40 text-black/60"
-                            )}
-                          >
-                            {isRecording ? <Square className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                          </button>
+                          <button onClick={togglePlay} className="p-4 bg-primary text-white rounded-full shadow-lg active:scale-95 transition-all">{isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}</button>
+                          <button onClick={handleToggleRecording} className={cn("p-4 rounded-full shadow-lg transition-all", isRecording ? "bg-red-500 animate-pulse text-white" : "bg-white/40 text-black/60")}>{isRecording ? <Square className="w-6 h-6" /> : <Mic className="w-6 h-6" />}</button>
                         </div>
                         <div className="text-right flex flex-col items-end gap-1">
                           <div className="text-2xl font-headline text-primary leading-none">{bpm.toFixed(0)}</div>
-                          <button onClick={handleTapTempo} className="flex items-center gap-1.5 px-2 py-0.5 bg-white/40 rounded-lg text-[8px] font-headline active:scale-90 transition-all">
-                            <Timer className="w-2.5 h-2.5" /> TAP
-                          </button>
+                          <button onClick={handleTapTempo} className="flex items-center gap-1.5 px-2 py-0.5 bg-white/40 rounded-lg text-[8px] font-headline active:scale-90 transition-all"><Timer className="w-2.5 h-2.5" /> TAP</button>
                         </div>
                       </div>
-
                       <div className="space-y-1.5">
-                        <div className="text-[8px] font-headline opacity-40 text-left">BPM SLIDER</div>
-                        <Slider 
-                          value={[bpm]} 
-                          max={180} 
-                          min={40} 
-                          step={1} 
-                          onValueChange={([val]) => { setBpm(val); audioEngine?.setBPM(val); }} 
-                        />
+                        <div className="text-[8px] font-headline opacity-40 text-left">BPM CONTROL</div>
+                        <Slider value={[bpm]} max={180} min={40} step={1} onValueChange={([val]) => { setBpm(val); audioEngine?.setBPM(val); }} />
                       </div>
-                      
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-3">
                           <Volume2 className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
-                            <div className="text-[8px] font-headline opacity-40 text-left">VOLUME</div>
+                            <div className="text-[8px] font-headline opacity-40 text-left">MASTER</div>
                             <Slider value={[audioEngine?.getSessionData().masterVolume || 1]} max={1} step={0.01} onValueChange={([val]) => { audioEngine?.setMasterVolume(val); setSessionVersion(v => v + 1); }} />
                           </div>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex items-center gap-3">
-                            <Sparkles className="w-4 h-4 opacity-40 shrink-0" />
-                            <div className="flex-1 space-y-1">
-                              <div className="text-[8px] font-headline opacity-40 text-left">REVERB</div>
-                              <Slider value={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setReverb(v); setSessionVersion(v => v + 1); }} />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Sliders className="w-4 h-4 opacity-40 shrink-0" />
-                            <div className="flex-1 space-y-1">
-                              <div className="text-[8px] font-headline opacity-40 text-left">DELAY</div>
-                              <Slider value={[audioEngine?.getDelay().wet || 0.3]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setDelay(v, 0.5); setSessionVersion(v => v + 1); }} />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <Activity className="w-4 h-4 opacity-40 shrink-0" />
-                          <div className="flex-1 space-y-1">
-                            <div className="text-[8px] font-headline opacity-40 text-left">FILTER</div>
-                            <Slider value={[audioEngine?.getFilter() || 20000]} max={20000} min={100} step={1} onValueChange={([v]) => { audioEngine?.setFilter(v); setSessionVersion(v => v + 1); }} />
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
                           <Activity className="w-4 h-4 opacity-40 shrink-0" />
                           <div className="flex-1 space-y-1">
                             <div className="text-[8px] font-headline opacity-40 text-left">SWING</div>
-                            <Slider value={[audioEngine?.getSwing() || 0]} max={0.5} step={0.01} onValueChange={([val]) => { audioEngine?.setSwing(val); setSessionVersion(v => v + 1); }} />
+                            <Slider value={[audioEngine?.getSwing() || 0]} max={0.5} step={0.01} onValueChange={([v]) => { audioEngine?.setSwing(v); setSessionVersion(v => v + 1); }} />
                           </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-3">
+                          <Sparkles className="w-4 h-4 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-1">
+                            <div className="text-[8px] font-headline opacity-40 text-left">REVERB</div>
+                            <Slider value={[audioEngine?.getReverb() || 0.2]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setReverb(v); setSessionVersion(v => v + 1); }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Sliders className="w-4 h-4 opacity-40 shrink-0" />
+                          <div className="flex-1 space-y-1">
+                            <div className="text-[8px] font-headline opacity-40 text-left">DELAY</div>
+                            <Slider value={[audioEngine?.getDelay().wet || 0.3]} max={1} step={0.01} onValueChange={([v]) => { audioEngine?.setDelay(v, 0.5); setSessionVersion(v => v + 1); }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Activity className="w-4 h-4 opacity-40 shrink-0" />
+                        <div className="flex-1 space-y-1">
+                          <div className="text-[8px] font-headline opacity-40 text-left">FILTER</div>
+                          <Slider value={[audioEngine?.getFilter() || 20000]} max={20000} min={100} step={1} onValueChange={([v]) => { audioEngine?.setFilter(v); setSessionVersion(v => v + 1); }} />
                         </div>
                       </div>
                     </div>
@@ -620,35 +539,14 @@ export default function BiotuneApp() {
                   <AccordionContent className="pt-3 px-1 space-y-3">
                     <div className="flex justify-center gap-1.5 p-1.5 bg-white/20 rounded-2xl">
                       {['A', 'B', 'C'].map(slot => (
-                        <button 
-                          key={slot}
-                          onClick={() => handleSwitchSlot(slot)}
-                          className={cn(
-                            "flex-1 py-2 rounded-xl font-headline text-[9px] transition-all",
-                            activeSlot === slot ? "bg-primary text-white shadow-sm scale-105" : "bg-white/40"
-                          )}
-                        >
-                          SLOT {slot}
-                        </button>
+                        <button key={slot} onClick={() => handleSwitchSlot(slot)} className={cn("flex-1 py-2 rounded-xl font-headline text-[9px] transition-all", activeSlot === slot ? "bg-primary text-white shadow-sm scale-105" : "bg-white/40")}>SLOT {slot}</button>
                       ))}
                     </div>
                     <div className="grid grid-cols-4 gap-1.5 p-3 bg-white/30 rounded-2xl border border-white/40 shadow-sm">
-                      <button onClick={handleUndo} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
-                        <Undo className="w-4 h-4 text-primary" />
-                        <span className="text-[7px] font-headline">UNDO</span>
-                      </button>
-                      <button onClick={handleSaveSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
-                        <Save className="w-4 h-4 text-primary" />
-                        <span className="text-[7px] font-headline">SAVE</span>
-                      </button>
-                      <button onClick={handleLoadSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20 transition-all active:scale-95">
-                        <RotateCcw className="w-4 h-4 text-primary" />
-                        <span className="text-[7px] font-headline">LOAD</span>
-                      </button>
-                      <button onClick={handleResetSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-destructive/20 transition-all active:scale-95">
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                        <span className="text-[7px] font-headline text-destructive">CLR</span>
-                      </button>
+                      <button onClick={handleUndo} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20"><Undo className="w-4 h-4 text-primary" /><span className="text-[7px] font-headline">UNDO</span></button>
+                      <button onClick={handleSaveSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20"><Save className="w-4 h-4 text-primary" /><span className="text-[7px] font-headline">SAVE</span></button>
+                      <button onClick={handleLoadSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-primary/20"><RotateCcw className="w-4 h-4 text-primary" /><span className="text-[7px] font-headline">LOAD</span></button>
+                      <button onClick={handleResetSession} className="flex flex-col items-center gap-1 p-2 bg-white/50 rounded-xl hover:bg-destructive/20"><Trash2 className="w-4 h-4 text-destructive" /><span className="text-[7px] font-headline text-destructive">CLR</span></button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>

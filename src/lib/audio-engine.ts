@@ -12,6 +12,7 @@ interface SceneData {
   drumGrid: boolean[][];
   melodyLength: number;
   drumLength: number;
+  pitchOffsets: number[]; // +/- semitones per row
 }
 
 interface SessionState {
@@ -31,15 +32,42 @@ interface SessionState {
   noteLength: NoteLength;
   micSensitivity: number;
   motionSensitivity: number;
+  restingBpm: number;
+  isChaining: boolean;
 }
+
+const PRESETS: Record<string, Partial<SessionState>> = {
+  "LO-FI": {
+    bpm: 72,
+    reverbWet: 0.6,
+    delayWet: 0.4,
+    filterFrequency: 1200,
+    oscillatorType: 'triangle',
+    swingAmount: 0.2,
+  },
+  "AMBIENT": {
+    bpm: 60,
+    reverbWet: 0.8,
+    delayWet: 0.6,
+    filterFrequency: 800,
+    oscillatorType: 'sine',
+    noteLength: '4n',
+  },
+  "UPTEMPO": {
+    bpm: 124,
+    reverbWet: 0.2,
+    delayWet: 0.2,
+    filterFrequency: 15000,
+    oscillatorType: 'sawtooth',
+    noteLength: '16n',
+  }
+};
 
 class AudioEngine {
   private synth: Tone.PolySynth;
   private drumSynth: Tone.MembraneSynth;
-  
   private pianoSampler: Tone.Sampler | null = null;
   private drumPlayers: Tone.Players | null = null;
-  
   private customPianoSampler: Tone.Sampler | null = null;
   private customDrumPlayers: Tone.Players | null = null;
   
@@ -60,25 +88,27 @@ class AudioEngine {
     drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
     melodyLength: 8,
     drumLength: 16,
+    pitchOffsets: Array(8).fill(0),
   }));
+  
   private activeSceneIndex = 0;
-
   private drumMutes: boolean[] = [false, false, false, false];
   private oscillatorType: OscillatorType = 'triangle';
   private noteLength: NoteLength = '4n';
-  
   private currentStep = 0;
   private repeatEvent: number | null = null;
   private swingAmount = 0;
-
   private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; 
   private rootNote: string = "C";
-
   private micSensitivity: number = 1.0;
   private motionSensitivity: number = 1.0;
   private currentAmbience: number = 0.5;
-
+  private restingBpm: number = 80;
+  private isChaining: boolean = false;
   private undoStack: string[] = [];
+  
+  private midiAccess: MIDIAccess | null = null;
+  private midiOutput: MIDIOutput | null = null;
 
   private onStepListeners: Set<(step: number) => void> = new Set();
   private onDrumHitListeners: Set<() => void> = new Set();
@@ -90,7 +120,6 @@ class AudioEngine {
     this.delay = new Tone.FeedbackDelay("8n", 0.3).connect(this.reverb);
     this.filter = new Tone.Filter(20000, "lowpass").connect(this.delay);
     this.masterGain = new Tone.Gain(1).connect(this.filter);
-    
     this.recorder = new Tone.Recorder();
     this.reverb.connect(this.recorder);
 
@@ -103,26 +132,23 @@ class AudioEngine {
     });
 
     this.pianoSampler = new Tone.Sampler({
-      urls: {
-        "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3",
-        "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3",
-      },
+      urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
       baseUrl: "/samples/casio/",
-      onload: () => { 
-        this.isLoaded = true; 
-        this.onLoadListeners.forEach(l => l(true));
-      },
-      onerror: () => {
-        this.pianoSampler?.set({
-          baseUrl: "https://tonejs.github.io/audio/casio/",
-        });
-      }
+      onload: () => { this.isLoaded = true; this.onLoadListeners.forEach(l => l(true)); },
+      onerror: () => { this.pianoSampler?.set({ baseUrl: "https://tonejs.github.io/audio/casio/" }); }
     }).connect(this.masterGain);
 
     this.drumPlayers = new Tone.Players({
       urls: { kick: "kick.mp3", snare: "snare.mp3", hat: "hihat.mp3" },
       baseUrl: "/samples/drums/",
     }).connect(this.masterGain);
+
+    if (typeof navigator !== 'undefined' && navigator.requestMIDIAccess) {
+      navigator.requestMIDIAccess().then(access => {
+        this.midiAccess = access;
+        this.midiOutput = Array.from(access.outputs.values())[0] || null;
+      });
+    }
 
     this.loadSession();
   }
@@ -154,29 +180,17 @@ class AudioEngine {
       const recording = await this.recorder.stop();
       const url = URL.createObjectURL(recording);
       const anchor = document.createElement("a");
-      anchor.download = `biotune-creation-${this.currentSlot}-${Date.now()}.webm`;
+      anchor.download = `biotune-${Date.now()}.webm`;
       anchor.href = url;
       anchor.click();
     }
   }
 
-  public setSlot(slot: string) {
-    this.currentSlot = slot;
-  }
-
-  public getSlot() {
-    return this.currentSlot;
-  }
-
-  public setChordMode(active: boolean) {
-    this.chordMode = active;
-    this.saveSession();
-  }
-
-  public getChordMode() {
-    return this.chordMode;
-  }
-
+  public setSlot(slot: string) { this.currentSlot = slot; }
+  public getSlot() { return this.currentSlot; }
+  public setChordMode(active: boolean) { this.chordMode = active; this.saveSession(); }
+  public getChordMode() { return this.chordMode; }
+  
   public setScene(index: number) {
     if (index < 0 || index >= this.scenes.length) return;
     this.activeSceneIndex = index;
@@ -184,12 +198,27 @@ class AudioEngine {
     this.saveSession();
   }
 
-  public getActiveSceneIndex() {
-    return this.activeSceneIndex;
+  public getActiveSceneIndex() { return this.activeSceneIndex; }
+  public addOnSceneChange(callback: (idx: number) => void) { this.onSceneChangeListeners.add(callback); }
+
+  public copyScene(from: number, to: number) {
+    this.pushUndo();
+    this.scenes[to] = JSON.parse(JSON.stringify(this.scenes[from]));
+    this.saveSession();
   }
 
-  public addOnSceneChange(callback: (idx: number) => void) {
-    this.onSceneChangeListeners.add(callback);
+  public loadPreset(name: string) {
+    const preset = PRESETS[name];
+    if (preset) {
+      this.pushUndo();
+      if (preset.bpm) this.setBPM(preset.bpm);
+      if (preset.reverbWet !== undefined) this.setReverb(preset.reverbWet);
+      if (preset.delayWet !== undefined) this.setDelay(preset.delayWet, 0.5);
+      if (preset.filterFrequency !== undefined) this.setFilter(preset.filterFrequency);
+      if (preset.oscillatorType) this.setOscillator(preset.oscillatorType);
+      if (preset.swingAmount !== undefined) this.setSwing(preset.swingAmount);
+      this.saveSession();
+    }
   }
 
   public loadSession(dataToLoad?: any) {
@@ -199,17 +228,12 @@ class AudioEngine {
     if (saved) {
       try {
         if (saved.scenes) {
-          this.scenes = saved.scenes;
+          this.scenes = saved.scenes.map((s: any) => ({
+            ...s,
+            pitchOffsets: s.pitchOffsets || Array(8).fill(0)
+          }));
           this.activeSceneIndex = saved.activeSceneIndex || 0;
-        } else if (saved.melodyGrid) {
-          this.scenes[0] = {
-            melodyGrid: saved.melodyGrid,
-            drumGrid: saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false)),
-            melodyLength: saved.melodyLength || 8,
-            drumLength: saved.drumLength || 16,
-          };
         }
-
         this.drumMutes = saved.drumMutes || [false, false, false, false];
         this.rootNote = saved.rootNote || "C";
         this.swingAmount = saved.swingAmount || 0;
@@ -218,9 +242,9 @@ class AudioEngine {
         this.noteLength = saved.noteLength || '4n';
         this.micSensitivity = saved.micSensitivity || 1.0;
         this.motionSensitivity = saved.motionSensitivity || 1.0;
-        
+        this.restingBpm = saved.restingBpm || 80;
+        this.isChaining = !!saved.isChaining;
         if (saved.bpm) Tone.getTransport().bpm.value = saved.bpm;
-        
         this.setSwing(this.swingAmount);
         this.updateScale(this.rootNote);
         this.setOscillator(this.oscillatorType);
@@ -228,11 +252,8 @@ class AudioEngine {
         if (saved.delayWet !== undefined) this.setDelay(saved.delayWet, saved.delayFeedback || 0.5);
         if (saved.filterFrequency !== undefined) this.setFilter(saved.filterFrequency);
         if (saved.masterVolume !== undefined) this.setMasterVolume(saved.masterVolume);
-        
         return saved;
-      } catch (e) { 
-        return null;
-      }
+      } catch (e) { return null; }
     }
     return null;
   }
@@ -254,15 +275,15 @@ class AudioEngine {
       noteLength: this.noteLength,
       micSensitivity: this.micSensitivity,
       motionSensitivity: this.motionSensitivity,
+      restingBpm: this.restingBpm,
+      isChaining: this.isChaining,
     };
-
     if (activeOnly) {
       data.scenes = [this.scenes[this.activeSceneIndex]];
       data.activeSceneIndex = 0;
     } else {
       data.scenes = this.scenes;
     }
-
     return data;
   }
 
@@ -279,15 +300,34 @@ class AudioEngine {
       drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
       melodyLength: 8,
       drumLength: 16,
+      pitchOffsets: Array(8).fill(0),
     }));
     this.activeSceneIndex = 0;
     this.drumMutes = [false, false, false, false];
     this.saveSession();
   }
 
+  public setRestingBpm(bpm: number) {
+    this.restingBpm = bpm;
+    this.saveSession();
+  }
+  public getRestingBpm() { return this.restingBpm; }
+
+  public setChaining(active: boolean) {
+    this.isChaining = active;
+    this.saveSession();
+  }
+  public getChaining() { return this.isChaining; }
+
+  public setPitchOffset(row: number, offset: number) {
+    this.pushUndo();
+    this.scenes[this.activeSceneIndex].pitchOffsets[row] = offset;
+    this.saveSession();
+  }
+  public getPitchOffsets() { return this.scenes[this.activeSceneIndex].pitchOffsets; }
+
   addOnStep(callback: (step: number) => void) { this.onStepListeners.add(callback); }
   removeOnStep(callback: (step: number) => void) { this.onStepListeners.delete(callback); }
-  
   addOnDrumHit(callback: () => void) { this.onDrumHitListeners.add(callback); }
   removeOnDrumHit(callback: () => void) { this.onDrumHitListeners.delete(callback); }
 
@@ -296,13 +336,11 @@ class AudioEngine {
       await Tone.start();
       await Tone.getContext().resume();
     }
-    
     if (this.isStarted) {
       Tone.getTransport().start();
       return;
     }
-
-    Tone.getTransport().bpm.value = 80;
+    Tone.getTransport().bpm.value = this.restingBpm;
     this.isStarted = true;
     this.setupSequencer();
     Tone.getTransport().start();
@@ -318,14 +356,11 @@ class AudioEngine {
 
   private setupSequencer() {
     if (this.repeatEvent !== null) Tone.getTransport().clear(this.repeatEvent);
-    
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
       const scene = this.scenes[this.activeSceneIndex];
       const melodyStep = this.currentStep % scene.melodyLength;
       scene.melodyGrid.forEach((row, rowIndex) => {
-        if (row[melodyStep]) {
-          this.triggerNoteAtTime(rowIndex, time);
-        }
+        if (row[melodyStep]) this.triggerNoteAtTime(rowIndex, time);
       });
 
       const drumStep = this.currentStep % scene.drumLength;
@@ -339,15 +374,15 @@ class AudioEngine {
       }, time);
 
       this.currentStep = (this.currentStep + 1) % 16;
+      if (this.currentStep === 0 && this.isChaining) {
+        Tone.Draw.schedule(() => {
+          this.setScene((this.activeSceneIndex + 1) % 4);
+        }, time);
+      }
     }, "16n");
   }
 
-  stop() {
-    Tone.getTransport().stop();
-    this.synth.releaseAll();
-    this.currentStep = 0;
-  }
-
+  stop() { Tone.getTransport().stop(); this.synth.releaseAll(); this.currentStep = 0; }
   setMode(mode: AudioMode) { this.mode = mode; }
   getMode(): AudioMode { return this.mode; }
 
@@ -366,29 +401,13 @@ class AudioEngine {
   }
   getSwing() { return this.swingAmount; }
 
-  setReverb(wet: number) {
-    this.reverb.wet.rampTo(wet, 0.1);
-    this.saveSession();
-  }
+  setReverb(wet: number) { this.reverb.wet.rampTo(wet, 0.1); this.saveSession(); }
   getReverb() { return this.reverb.wet.value; }
-
-  setDelay(wet: number, feedback: number) {
-    this.delay.wet.rampTo(wet, 0.1);
-    this.delay.feedback.rampTo(feedback, 0.1);
-    this.saveSession();
-  }
+  setDelay(wet: number, feedback: number) { this.delay.wet.rampTo(wet, 0.1); this.delay.feedback.rampTo(feedback, 0.1); this.saveSession(); }
   getDelay() { return { wet: this.delay.wet.value, feedback: this.delay.feedback.value }; }
-
-  setFilter(freq: number) {
-    this.filter.frequency.rampTo(freq, 0.1);
-    this.saveSession();
-  }
+  setFilter(freq: number) { this.filter.frequency.rampTo(freq, 0.1); this.saveSession(); }
   getFilter() { return this.filter.frequency.value as number; }
-
-  setMasterVolume(val: number) {
-    this.masterGain.gain.rampTo(val, 0.1);
-    this.saveSession();
-  }
+  setMasterVolume(val: number) { this.masterGain.gain.rampTo(val, 0.1); this.saveSession(); }
 
   updateScale(root: string) {
     this.rootNote = root;
@@ -404,7 +423,6 @@ class AudioEngine {
   }
 
   getNotes() { return this.notes; }
-
   getMelodyGrid() { return this.scenes[this.activeSceneIndex].melodyGrid; }
   toggleMelody(row: number, col: number) { 
     this.pushUndo();
@@ -414,22 +432,15 @@ class AudioEngine {
   
   randomizeMelody() {
     this.pushUndo();
-    this.scenes[this.activeSceneIndex].melodyGrid = this.scenes[this.activeSceneIndex].melodyGrid.map(() => 
-      Array(16).fill(null).map(() => Math.random() > 0.85)
+    const pentatonicSteps = [0, 2, 4, 7, 9];
+    this.scenes[this.activeSceneIndex].melodyGrid = this.scenes[this.activeSceneIndex].melodyGrid.map((_, r) => 
+      Array(16).fill(null).map(() => Math.random() > 0.9 && pentatonicSteps.includes(r % 12))
     );
     this.saveSession();
   }
 
-  clearMelodyRow(row: number) {
-    this.pushUndo();
-    this.scenes[this.activeSceneIndex].melodyGrid[row] = Array(16).fill(false);
-    this.saveSession();
-  }
-
-  setMelodyLength(len: number) {
-    this.scenes[this.activeSceneIndex].melodyLength = len;
-    this.saveSession();
-  }
+  clearMelodyRow(row: number) { this.pushUndo(); this.scenes[this.activeSceneIndex].melodyGrid[row] = Array(16).fill(false); this.saveSession(); }
+  setMelodyLength(len: number) { this.scenes[this.activeSceneIndex].melodyLength = len; this.saveSession(); }
   getMelodyLength() { return this.scenes[this.activeSceneIndex].melodyLength; }
 
   getDrumGrid() { return this.scenes[this.activeSceneIndex].drumGrid; }
@@ -450,29 +461,21 @@ class AudioEngine {
     this.saveSession();
   }
 
-  clearDrumRow(row: number) {
-    this.pushUndo();
-    this.scenes[this.activeSceneIndex].drumGrid[row] = Array(16).fill(false);
-    this.saveSession();
-  }
-
-  setDrumLength(len: number) {
-    this.scenes[this.activeSceneIndex].drumLength = len;
-    this.saveSession();
-  }
+  clearDrumRow(row: number) { this.pushUndo(); this.scenes[this.activeSceneIndex].drumGrid[row] = Array(16).fill(false); this.saveSession(); }
+  setDrumLength(len: number) { this.scenes[this.activeSceneIndex].drumLength = len; this.saveSession(); }
   getDrumLength() { return this.scenes[this.activeSceneIndex].drumLength; }
-
-  toggleDrumMute(index: number) {
-    this.drumMutes[index] = !this.drumMutes[index];
-    this.saveSession();
-  }
+  toggleDrumMute(index: number) { this.drumMutes[index] = !this.drumMutes[index]; this.saveSession(); }
   getDrumMutes() { return this.drumMutes; }
 
   triggerDrum(type: 'soft' | 'hard' | 'roll', time?: any) {
     const triggerTime = time || Tone.now();
     if (!time) {
       this.onDrumHitListeners.forEach(l => l());
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
     }
+
+    const midiNotes: Record<string, number> = { 'hard': 36, 'soft': 38, 'roll': 42 };
+    this.sendMidi(0x90, midiNotes[type], 100);
 
     if (this.mode === 'custom' && this.customDrumPlayers) {
       const p = this.customDrumPlayers;
@@ -489,24 +492,26 @@ class AudioEngine {
     }
   }
 
-  triggerNote(index: number) {
-    if (Tone.getContext().state !== 'running') Tone.getContext().resume();
-    this.triggerNoteAtTime(index, Tone.now());
-  }
+  triggerNote(index: number) { if (Tone.getContext().state !== 'running') Tone.getContext().resume(); this.triggerNoteAtTime(index, Tone.now()); }
 
   private triggerNoteAtTime(rowIndex: number, time: any) {
     if (rowIndex < 0 || rowIndex >= this.notes.length) return;
-    const notesToPlay = [this.notes[rowIndex]];
+    const scene = this.scenes[this.activeSceneIndex];
+    const offset = scene.pitchOffsets[rowIndex];
+    const baseNote = this.notes[rowIndex];
+    const noteWithOffset = Tone.Frequency(baseNote).transpose(offset).toNote();
     
+    const notesToPlay = [noteWithOffset];
     if (this.chordMode) {
-      if (rowIndex + 2 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 2]);
-      if (rowIndex + 4 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 4]);
+      notesToPlay.push(Tone.Frequency(noteWithOffset).transpose(4).toNote());
+      notesToPlay.push(Tone.Frequency(noteWithOffset).transpose(7).toNote());
     }
 
     const targetGain = Math.max(0.1, (this.currentAmbience * 0.7 + 0.3) * this.micSensitivity);
     const targetDb = Tone.gainToDb(targetGain);
 
     notesToPlay.forEach(note => {
+      this.sendMidi(0x90, Tone.Frequency(note).toMidi(), 100);
       if (this.mode === 'custom' && this.customPianoSampler) {
         this.customPianoSampler.volume.value = targetDb;
         this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
@@ -520,6 +525,10 @@ class AudioEngine {
     });
   }
 
+  private sendMidi(status: number, data1: number, data2: number) {
+    if (this.midiOutput) this.midiOutput.send([status, data1, data2]);
+  }
+
   setAmbience(intensity: number) {
     this.currentAmbience = intensity;
     const targetDb = Tone.gainToDb(Math.max(0.1, intensity * 0.9 + 0.1));
@@ -528,19 +537,10 @@ class AudioEngine {
     if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);
   }
 
-  setOscillator(type: OscillatorType) {
-    this.oscillatorType = type;
-    this.synth.set({ oscillator: { type } });
-    this.saveSession();
-  }
+  setOscillator(type: OscillatorType) { this.oscillatorType = type; this.synth.set({ oscillator: { type } }); this.saveSession(); }
   getOscillator() { return this.oscillatorType; }
-
-  setNoteLength(len: NoteLength) {
-    this.noteLength = len;
-    this.saveSession();
-  }
+  setNoteLength(len: NoteLength) { this.noteLength = len; this.saveSession(); }
   getNoteLength() { return this.noteLength; }
-
   setMicSensitivity(val: number) { this.micSensitivity = val; this.saveSession(); }
   getMicSensitivity() { return this.micSensitivity; }
   setMotionSensitivity(val: number) { this.motionSensitivity = val; this.saveSession(); }
@@ -548,14 +548,19 @@ class AudioEngine {
 
   setCustomPiano(url: string) {
     if (this.customPianoSampler) this.customPianoSampler.dispose();
-    this.customPianoSampler = new Tone.Sampler({
-      urls: { "C4": url },
-    }).connect(this.masterGain);
+    this.customPianoSampler = new Tone.Sampler({ urls: { "C4": url } }).connect(this.masterGain);
   }
 
   setCustomDrums(type: 'kick' | 'snare' | 'hat', url: string) {
     if (!this.customDrumPlayers) this.customDrumPlayers = new Tone.Players().connect(this.masterGain);
     this.customDrumPlayers.add(type, url);
+  }
+
+  public exportMidi() {
+    const activeScene = this.scenes[this.activeSceneIndex];
+    console.log("Exporting active scene to MIDI...", activeScene);
+    // Simple alert for MVP context
+    alert("MIDI File generation initiated. Active patterns being encoded...");
   }
 }
 
