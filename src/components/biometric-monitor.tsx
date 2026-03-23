@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { dynamicBiometricMusicGeneration } from '@/ai/flows/dynamic-biometric-music-generation-flow';
 import { audioEngine } from '@/lib/audio-engine';
-import { Activity, Mic, Wind, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Activity, Mic, Wind, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function BiometricMonitor() {
@@ -81,7 +81,7 @@ export function BiometricMonitor() {
     const normalized = Math.min(1, average / 100);
     setBreathing(normalized);
     
-    // Live update for ambience volume
+    // Live update for ambience volume (immediate feedback)
     audioEngine?.setAmbience(normalized);
     
     animationFrameRef.current = requestAnimationFrame(analyzeMic);
@@ -90,8 +90,8 @@ export function BiometricMonitor() {
   const startAiPolling = () => {
     if (aiIntervalRef.current) clearInterval(aiIntervalRef.current);
     
+    // Polling every 10 seconds to respect API rate limits (approx 6 requests per minute)
     aiIntervalRef.current = setInterval(async () => {
-      // Capturing current intensities for the flow
       const currentBreathing = breathing;
       const currentMovement = movement;
 
@@ -112,9 +112,10 @@ export function BiometricMonitor() {
         }
         
       } catch (e) {
-        console.error("AI Music Influence Error:", e);
+        // Log error but don't crash; polling continues
+        console.warn("AI Music Influence Rate Limit or Error:", e);
       }
-    }, 2000);
+    }, 10000);
   };
 
   useEffect(() => {
