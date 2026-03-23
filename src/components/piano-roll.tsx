@@ -16,7 +16,9 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   useEffect(() => {
     if (audioEngine) {
       setGrid([...audioEngine.getMelodyGrid().map(row => [...row])]);
-      audioEngine.setOnStep((step) => setCurrentStep(step % 8));
+      const handleStep = (step: number) => setCurrentStep(step % 8);
+      audioEngine.addOnStep(handleStep);
+      return () => audioEngine.removeOnStep(handleStep);
     }
   }, [sessionVersion]);
 

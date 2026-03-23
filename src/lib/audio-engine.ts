@@ -28,8 +28,8 @@ class AudioEngine {
   private notes: string[] = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"]; 
   private rootNote: string = "C";
 
-  private onStepCallback: ((step: number) => void) | null = null;
-  private onDrumHitCallback: (() => void) | null = null;
+  private onStepListeners: Set<(step: number) => void> = new Set();
+  private onDrumHitListeners: Set<() => void> = new Set();
 
   constructor() {
     this.synth = new Tone.PolySynth(Tone.Synth).toDestination();
@@ -91,8 +91,11 @@ class AudioEngine {
     this.saveSession();
   }
 
-  setOnStep(callback: (step: number) => void) { this.onStepCallback = callback; }
-  setOnDrumHit(callback: () => void) { this.onDrumHitCallback = callback; }
+  addOnStep(callback: (step: number) => void) { this.onStepListeners.add(callback); }
+  removeOnStep(callback: (step: number) => void) { this.onStepListeners.delete(callback); }
+  
+  addOnDrumHit(callback: () => void) { this.onDrumHitListeners.add(callback); }
+  removeOnDrumHit(callback: () => void) { this.onDrumHitListeners.delete(callback); }
 
   async start() {
     if (this.isStarted) {
@@ -128,9 +131,9 @@ class AudioEngine {
       if (this.drumGrid[2][drumStep]) this.triggerDrum('roll', time); 
       if (this.drumGrid[3][drumStep]) this.triggerDrum('soft', time); 
 
-      if (this.onStepCallback) {
-        Tone.Draw.schedule(() => this.onStepCallback!(this.currentStep), time);
-      }
+      Tone.Draw.schedule(() => {
+        this.onStepListeners.forEach(listener => listener(this.currentStep));
+      }, time);
 
       this.currentStep = (this.currentStep + 1) % 16;
     }, "16n");
@@ -179,7 +182,9 @@ class AudioEngine {
 
   triggerDrum(type: 'soft' | 'hard' | 'roll', time?: any) {
     const triggerTime = time || Tone.now();
-    if (this.onDrumHitCallback && !time) this.onDrumHitCallback();
+    if (!time) {
+      this.onDrumHitListeners.forEach(l => l());
+    }
 
     if (this.mode === 'custom' && this.customDrumPlayers) {
       const p = this.customDrumPlayers;

@@ -20,9 +20,11 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const breathingRef = useRef(0);
   const movementRef = useRef(0);
+  const isMonitoringRef = useRef(false);
 
   const startMonitoring = async () => {
     try {
@@ -42,20 +44,24 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       }
 
       window.addEventListener('devicemotion', handleMotion);
+      isMonitoringRef.current = true;
       setIsMonitoring(true);
       analyze();
       startLocalPolling();
     } catch (err: any) {
       setError(err.message || 'Permissions denied.');
+      isMonitoringRef.current = false;
       setIsMonitoring(false);
     }
   };
 
   const stopMonitoring = () => {
+    isMonitoringRef.current = false;
     setIsMonitoring(false);
     window.removeEventListener('devicemotion', handleMotion);
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (audioContextRef.current) audioContextRef.current.close();
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
   };
 
   const handleMotion = (event: DeviceMotionEvent) => {
@@ -79,7 +85,6 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     onBreathingUpdate?.(normalized);
     audioEngine?.setAmbience(normalized);
 
-    // Visualizer
     const ctx = canvasRef.current.getContext('2d');
     if (ctx) {
       ctx.clearRect(0, 0, 300, 60);
@@ -94,18 +99,18 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   };
 
   const startLocalPolling = () => {
-    setInterval(() => {
-      if (!isMonitoring) return;
-      const breathing = breathingRef.current;
-      const movement = movementRef.current;
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    pollingIntervalRef.current = setInterval(() => {
+      if (!isMonitoringRef.current) return;
+      const b = breathingRef.current;
+      const m = movementRef.current;
       
-      // Local logic replacement for AI flow
-      const avg = (breathing + movement) / 2;
-      const tempoInfl = avg < 0.3 ? -2 : avg > 0.7 ? 2 : 0;
+      const avg = (b + m) / 2;
+      const tempoInfl = avg < 0.3 ? -1 : avg > 0.7 ? 1 : 0;
       if (tempoInfl !== 0) audioEngine?.setBPM((audioEngine?.getBPM() || 80) + tempoInfl);
       
-      if (movement > 0.8) audioEngine?.triggerDrum('hard');
-    }, 2000);
+      if (m > 0.85) audioEngine?.triggerDrum('hard');
+    }, 1000);
   };
 
   useEffect(() => { return () => stopMonitoring(); }, []);

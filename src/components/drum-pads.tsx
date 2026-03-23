@@ -23,7 +23,9 @@ export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
   useEffect(() => {
     if (audioEngine) {
       setGrid([...audioEngine.getDrumGrid().map(row => [...row])]);
-      audioEngine.setOnStep((step) => setCurrentStep(step));
+      const handleStep = (step: number) => setCurrentStep(step);
+      audioEngine.addOnStep(handleStep);
+      return () => audioEngine.removeOnStep(handleStep);
     }
   }, [sessionVersion]);
 

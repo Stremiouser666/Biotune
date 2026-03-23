@@ -41,10 +41,12 @@ export default function BiotuneApp() {
 
   useEffect(() => {
     if (audioEngine) {
-      audioEngine.setOnDrumHit(() => {
+      const handleHit = () => {
         setIsPulsing(true);
-        setTimeout(() => setIsPulsing(false), 200);
-      });
+        setTimeout(() => setIsPulsing(false), 150);
+      };
+      audioEngine.addOnDrumHit(handleHit);
+      return () => audioEngine.removeOnDrumHit(handleHit);
     }
   }, []);
 
@@ -98,7 +100,7 @@ export default function BiotuneApp() {
     const success = audioEngine?.loadSession();
     if (success) {
       setSessionVersion(v => v + 1);
-      setRootNote(audioEngine?.getMelodyGrid() ? "C" : rootNote); // Fallback logic
+      setRootNote(audioEngine?.getMelodyGrid() ? "C" : rootNote);
       toast({ title: "Session Loaded", description: "Welcome back to your creation!" });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: "No saved session found." });
@@ -116,7 +118,7 @@ export default function BiotuneApp() {
       <div 
         className={cn(
           "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:1500ms]",
-          step === 'intro' ? "opacity-40 blur-[8px]" : "opacity-100 blur-0 scale(1.05) [filter:brightness(0.6)_saturate(0.7)]",
+          step === 'intro' ? "opacity-40 blur-[8px]" : "opacity-100 blur-0 scale-[1.05] [filter:brightness(0.6)_saturate(0.7)]",
           isPulsing && "animate-bg-pulse scale-110 saturate-150 brightness-90"
         )} 
       />
@@ -143,6 +145,23 @@ export default function BiotuneApp() {
               <button onClick={handleCreateSound} className="px-8 py-5 text-xl bg-primary text-white rounded-2xl shadow-[0_0_30px_rgba(255,77,255,0.8)] transition-all hover:scale-105 active:scale-95 font-headline whitespace-nowrap">
                 ✨ CREATE MY SOUND
               </button>
+            </div>
+          )}
+
+          {step === 'activation' && (
+            <div className="flex flex-col items-center gap-6">
+              <AnimatedText text="Listening to your presence..." className="text-xl md:text-3xl font-headline" />
+              <div className="flex gap-2 items-center text-primary/60">
+                <Activity className="w-6 h-6 animate-pulse" />
+                <span className="text-xs font-headline">CALIBRATING BIOMETRICS</span>
+              </div>
+            </div>
+          )}
+
+          {step === 'magic' && (
+            <div className="flex flex-col items-center gap-6">
+              <AnimatedText text="A unique musical theme is coming alive ✨" className="text-xl md:text-3xl font-headline" />
+              <AnimatedText text="Connecting rhythm to your movement..." delayPerWord={300} className="text-sm opacity-60" />
             </div>
           )}
 
