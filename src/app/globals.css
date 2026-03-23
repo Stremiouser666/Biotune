@@ -31,9 +31,12 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-background text-foreground overflow-hidden font-body;
+    @apply bg-background text-foreground overflow-hidden font-body fixed inset-0;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
