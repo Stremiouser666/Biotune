@@ -170,14 +170,18 @@ class AudioEngine {
     this.notes = scaleMap[root] || scaleMap["C"];
   }
 
+  getNotes() { return this.notes; }
+
   getMelodyGrid() { return this.melodyGrid; }
   toggleMelody(row: number, col: number) { 
     this.melodyGrid[row][col] = !this.melodyGrid[row][col]; 
+    this.saveSession();
   }
 
   getDrumGrid() { return this.drumGrid; }
   toggleDrumStep(padIndex: number, stepIndex: number) { 
     this.drumGrid[padIndex][stepIndex] = !this.drumGrid[padIndex][stepIndex]; 
+    this.saveSession();
   }
 
   triggerDrum(type: 'soft' | 'hard' | 'roll', time?: any) {
@@ -218,6 +222,8 @@ class AudioEngine {
   setAmbience(intensity: number) {
     const targetDb = Math.max(-40, Tone.gainToDb(intensity) - 10);
     this.synth.volume.rampTo(targetDb, 0.5);
+    if (this.pianoSampler) this.pianoSampler.volume.rampTo(targetDb, 0.5);
+    if (this.customPianoSampler) this.customPianoSampler.volume.rampTo(targetDb, 0.5);
   }
 
   setCustomPiano(url: string) {

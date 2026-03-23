@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
@@ -97,10 +98,11 @@ export default function BiotuneApp() {
   };
 
   const handleLoadSession = () => {
-    const success = audioEngine?.loadSession();
-    if (success) {
+    const data = audioEngine?.loadSession();
+    if (data) {
       setSessionVersion(v => v + 1);
-      setRootNote(audioEngine?.getMelodyGrid() ? "C" : rootNote);
+      setRootNote(data.rootNote);
+      setBpm(audioEngine?.getBPM() || 80);
       toast({ title: "Session Loaded", description: "Welcome back to your creation!" });
     } else {
       toast({ variant: "destructive", title: "Load Failed", description: "No saved session found." });
@@ -185,7 +187,7 @@ export default function BiotuneApp() {
                     <div className="p-6 bg-white/30 rounded-2xl border border-white/40 shadow-lg space-y-6">
                       <div className="flex flex-wrap gap-2 justify-center">
                         {["C", "D", "E", "F", "G"].map(note => (
-                          <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); }} className={cn("px-4 py-2 rounded-xl font-headline transition-all", rootNote === note ? "bg-primary text-white scale-110" : "bg-white/40")}>
+                          <button key={note} onClick={() => { setRootNote(note); audioEngine?.updateScale(note); setSessionVersion(v => v + 1); }} className={cn("px-4 py-2 rounded-xl font-headline transition-all", rootNote === note ? "bg-primary text-white scale-110" : "bg-white/40")}>
                             {note}
                           </button>
                         ))}
@@ -199,7 +201,12 @@ export default function BiotuneApp() {
                       <Dialog>
                         <DialogTrigger asChild><button className="w-full py-4 bg-white/40 border border-primary/40 rounded-xl font-headline text-sm"><Wand2 className="w-5 h-5 inline mr-2" />CUSTOMIZE SAMPLES</button></DialogTrigger>
                         <DialogContent className="font-headline">
-                          <DialogHeader><DialogTitle className="text-primary">SAMPLE IMPORTER</DialogTitle></DialogHeader>
+                          <DialogHeader>
+                            <DialogTitle className="text-primary">SAMPLE IMPORTER</DialogTitle>
+                            <DialogDescription className="text-xs opacity-60">
+                              Import your own magical .wav or .mp3 files to customize your sound palette.
+                            </DialogDescription>
+                          </DialogHeader>
                           <div className="grid gap-4 py-4">
                             {['piano', 'kick', 'snare', 'hat'].map(id => (
                               <div key={id} className="flex items-center justify-between bg-black/5 p-3 rounded-xl">

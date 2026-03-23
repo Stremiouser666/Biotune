@@ -12,10 +12,12 @@ interface PianoRollProps {
 export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
   const [grid, setGrid] = useState<boolean[][]>([]);
   const [currentStep, setCurrentStep] = useState(0);
+  const [currentNotes, setCurrentNotes] = useState<string[]>([]);
 
   useEffect(() => {
     if (audioEngine) {
       setGrid([...audioEngine.getMelodyGrid().map(row => [...row])]);
+      setCurrentNotes(audioEngine.getNotes());
       const handleStep = (step: number) => setCurrentStep(step % 8);
       audioEngine.addOnStep(handleStep);
       return () => audioEngine.removeOnStep(handleStep);
@@ -26,20 +28,18 @@ export function PianoRoll({ sessionVersion = 0 }: PianoRollProps) {
     audioEngine?.toggleMelody(row, col);
     setGrid([...audioEngine!.getMelodyGrid().map(r => [...r])]);
     if (!grid[row][col]) {
-      const notes = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"];
-      audioEngine?.triggerNote(notes[row]);
+      const activeNotes = audioEngine?.getNotes() || [];
+      audioEngine?.triggerNote(activeNotes[row]);
     }
   };
-
-  const notes = ["C5", "A4", "G4", "F4", "E4", "D4", "C4", "G3"];
 
   return (
     <div className="w-full bg-white/30 backdrop-blur-md p-4 rounded-3xl border border-white/50 shadow-xl overflow-x-auto">
       <div className="flex flex-col gap-1 min-w-[300px]">
         {grid.map((row, rowIndex) => (
           <div key={rowIndex} className="flex gap-1 h-10">
-            <div className="w-8 flex items-center justify-center text-[10px] font-headline opacity-40">
-              {notes[rowIndex]}
+            <div className="w-10 flex items-center justify-center text-[10px] font-headline opacity-40">
+              {currentNotes[rowIndex]}
             </div>
             {row.map((active, colIndex) => (
               <button

@@ -101,15 +101,32 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const startLocalPolling = () => {
     if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
     pollingIntervalRef.current = setInterval(() => {
-      if (!isMonitoringRef.current) return;
+      if (!isMonitoringRef.current || !audioEngine) return;
+      
       const b = breathingRef.current;
       const m = movementRef.current;
-      
       const avg = (b + m) / 2;
-      const tempoInfl = avg < 0.3 ? -1 : avg > 0.7 ? 1 : 0;
-      if (tempoInfl !== 0) audioEngine?.setBPM((audioEngine?.getBPM() || 80) + tempoInfl);
       
-      if (m > 0.85) audioEngine?.triggerDrum('hard');
+      const currentBpm = audioEngine.getBPM();
+      const baseBpm = 80;
+      let nextBpm = currentBpm;
+
+      if (avg < 0.3) {
+        nextBpm -= 1; 
+      } else if (avg > 0.7) {
+        nextBpm += 1;
+      } else {
+        // Drift back towards base BPM if in neutral zone
+        if (Math.abs(currentBpm - baseBpm) > 0.5) {
+          nextBpm += (baseBpm - currentBpm) * 0.05; 
+        } else {
+          nextBpm = baseBpm;
+        }
+      }
+      
+      audioEngine.setBPM(nextBpm);
+      
+      if (m > 0.85) audioEngine.triggerDrum('hard');
     }, 1000);
   };
 
