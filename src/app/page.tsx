@@ -374,6 +374,9 @@ export default function BiotuneApp() {
                               )}
                             >
                               {idx + 1}
+                              {audioEngine?.hasContent(idx) && (
+                                <div className={cn("absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full", activeScene === idx ? "bg-white" : "bg-primary")} />
+                              )}
                             </button>
                           </div>
                         ))}
@@ -453,7 +456,7 @@ export default function BiotuneApp() {
                         </div>
                         <div className="space-y-1.5">
                           <div className="text-[8px] font-headline opacity-60 text-center">LENGTH</div>
-                          <div className="grid grid-cols-1 gap-1">
+                          <div className="grid grid-1 gap-1">
                             {[{ id: '16n', label: 'SHORT' }, { id: '8n', label: 'MEDIUM' }, { id: '4n', label: 'LONG' }].map(({id, label}) => (
                               <button key={id} onClick={() => { audioEngine?.setNoteLength(id as NoteLength); setSessionVersion(v => v + 1); }} className={cn("py-0.5 text-[7px] rounded-md font-headline", audioEngine?.getNoteLength() === id ? "bg-primary text-white" : "bg-white/40")}>{label}</button>
                             ))}

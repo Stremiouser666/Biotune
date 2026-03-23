@@ -307,6 +307,14 @@ class AudioEngine {
     this.saveSession();
   }
 
+  public hasContent(index: number) {
+    const scene = this.scenes[index];
+    if (!scene) return false;
+    const hasMelody = scene.melodyGrid.some(row => row.some(step => step));
+    const hasDrums = scene.drumGrid.some(row => row.some(step => step));
+    return hasMelody || hasDrums;
+  }
+
   public setRestingBpm(bpm: number) {
     this.restingBpm = bpm;
     this.saveSession();
@@ -517,7 +525,7 @@ class AudioEngine {
         this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
         this.pianoSampler.volume.value = targetDb;
-        this.pianoSampler.triggerAttackRelease(note, this.noteLength, time);
+        this. pianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else {
         this.synth.volume.value = targetDb;
         this.synth.triggerAttackRelease(note, this.noteLength, time);
