@@ -242,7 +242,7 @@ export default function BiotuneApp() {
     const encoded = btoa(JSON.stringify(data));
     const url = `${window.location.origin}${window.location.pathname}?session=${encoded}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link Enrolled!", description: "Share this link with someone to show your creation." });
+    toast({ title: "Link Copied!", description: "Share this URL to show off your magical session." });
   };
 
   const finishOnboarding = () => {
@@ -506,8 +506,8 @@ export default function BiotuneApp() {
                         <DialogContent className="font-headline max-w-[90vw] rounded-3xl">
                           <DialogHeader>
                             <DialogTitle className="text-primary text-lg">SAMPLE IMPORTER</DialogTitle>
-                            <DialogDescription className="text-[9px] opacity-60">
-                              Import .wav or .mp3 files to customize your sounds.
+                            <DialogDescription className="text-[10px] opacity-60">
+                              Import .wav or .mp3 files to customize your sounds. (Bundled offline assets are stored at /samples)
                             </DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-2 py-2">
@@ -657,4 +657,3 @@ export default function BiotuneApp() {
     </main>
   );
 }
-

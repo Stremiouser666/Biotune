@@ -104,26 +104,29 @@ class AudioEngine {
       envelope: { attack: 0.1, release: 1.2, decay: 0.3, sustain: 0.4 }
     });
 
+    // Bundled sample configuration: Update paths to /samples for offline/PWA capability
     this.pianoSampler = new Tone.Sampler({
       urls: {
         "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3",
         "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3",
       },
-      baseUrl: "https://tonejs.github.io/audio/casio/",
+      baseUrl: "/samples/casio/", // Local path for bundling. Place Casio .mp3 files here.
       onload: () => { 
         this.isLoaded = true; 
         this.onLoadListeners.forEach(l => l(true));
       },
       onerror: (err) => {
-        console.warn("Sampler failed to load, falling back to synth.", err);
-        this.isLoaded = false;
-        this.onLoadListeners.forEach(l => l(false));
+        console.warn("Local samples missing at /samples/casio/. Falling back to remote Tone.js assets.");
+        // Attempt to load from remote as a secondary fallback
+        this.pianoSampler?.set({
+          baseUrl: "https://tonejs.github.io/audio/casio/",
+        });
       }
     }).connect(this.masterGain);
 
     this.drumPlayers = new Tone.Players({
       urls: { kick: "kick.mp3", snare: "snare.mp3", hat: "hihat.mp3" },
-      baseUrl: "https://tonejs.github.io/audio/drum-samples/CR78/",
+      baseUrl: "/samples/drums/", // Local path for bundling. Place CR78 samples here.
     }).connect(this.masterGain);
 
     this.loadSession();
@@ -204,7 +207,6 @@ class AudioEngine {
           this.scenes = saved.scenes;
           this.activeSceneIndex = saved.activeSceneIndex || 0;
         } else {
-          // Fallback for old single-scene saves
           this.scenes[0] = {
             melodyGrid: saved.melodyGrid || Array(8).fill(null).map(() => Array(16).fill(false)),
             drumGrid: saved.drumGrid || Array(4).fill(null).map(() => Array(16).fill(false)),
@@ -477,9 +479,9 @@ class AudioEngine {
       if (type === 'roll' && p.has("hat")) p.player("hat").start(triggerTime);
     } else if (this.mode === 'sampled' && this.drumPlayers) {
       const p = this.drumPlayers;
-      if (type === 'hard') p.player("kick").start(triggerTime);
-      if (type === 'soft') p.player("snare").start(triggerTime);
-      if (type === 'roll') p.player("hat").start(triggerTime);
+      if (type === 'hard' && p.has("kick")) p.player("kick").start(triggerTime);
+      if (type === 'soft' && p.has("snare")) p.player("snare").start(triggerTime);
+      if (type === 'roll' && p.has("hat")) p.player("hat").start(triggerTime);
     } else {
       this.drumSynth.triggerAttackRelease("C1", "8n", triggerTime, type === 'hard' ? 1 : 0.5);
     }
@@ -499,12 +501,17 @@ class AudioEngine {
       if (rowIndex + 4 < this.notes.length) notesToPlay.push(this.notes[rowIndex + 4]);
     }
 
+    const currentTargetDb = Tone.gainToDb(Math.max(0.1, this.micSensitivity * 0.9 + 0.1));
+
     notesToPlay.forEach(note => {
       if (this.mode === 'custom' && this.customPianoSampler) {
+        this.customPianoSampler.volume.value = currentTargetDb;
         this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
+        this.pianoSampler.volume.value = currentTargetDb;
         this.pianoSampler.triggerAttackRelease(note, this.noteLength, time);
       } else {
+        this.synth.volume.value = currentTargetDb;
         this.synth.triggerAttackRelease(note, this.noteLength, time);
       }
     });
