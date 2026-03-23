@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -108,17 +107,17 @@ export default function BiotuneApp() {
       {/* 🌌 Background Layer */}
       <div 
         className={cn(
-          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2000ms] ease-in-out",
-          step === 'intro' ? "opacity-40 blur-[6px]" : "opacity-100 blur-0 scale-105",
+          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2500ms] cubic-bezier(0.23, 1, 0.32, 1)",
+          step === 'intro' ? "opacity-40 blur-[8px] scale-100" : "opacity-100 blur-0 scale-105",
           isPulsing && "animate-bg-pulse"
         )} 
       />
 
-      {/* 🌑 Overlay Layer - More subtle and atmospheric than before */}
+      {/* 🌑 Subtle Atmosphere Overlay */}
       <div 
         className={cn(
-          "fixed inset-0 transition-all [transition-duration:2000ms] ease-in-out pointer-events-none",
-          step === 'intro' ? "bg-white/30 backdrop-blur-[2px]" : "bg-white/10"
+          "fixed inset-0 transition-all [transition-duration:2500ms] ease-in-out pointer-events-none",
+          step === 'intro' ? "bg-white/20 backdrop-blur-[1px]" : "bg-transparent"
         )} 
       />
 
@@ -129,7 +128,7 @@ export default function BiotuneApp() {
       {step === 'dashboard' && (
         <button
           onClick={handleGoHome}
-          className="fixed top-6 right-6 p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all z-50 group"
+          className="fixed top-6 right-6 p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all z-50 group animate-in fade-in duration-1000"
           title="Go Home"
         >
           <Home className="w-6 h-6 text-[#ff4dff] group-hover:rotate-[-10deg] transition-transform" />
@@ -161,23 +160,23 @@ export default function BiotuneApp() {
           )}
 
           {(step === 'activation' || step === 'magic') && (
-            <div className="flex flex-col items-center gap-12 text-center animate-in fade-in duration-1000">
+            <div className="flex flex-col items-center gap-12 text-center animate-scroll-open">
               <AnimatedText 
                 text={step === 'activation' ? texts[1] : texts[2]} 
                 className="text-3xl md:text-5xl font-headline"
               />
               {step === 'magic' && (
                 <div className="flex gap-4 animate-bounce">
-                  <Waves className="w-10 h-10 text-primary" />
+                  <Waves className="w-10 h-10 text-[#ff4dff]" />
                   <Music className="w-10 h-10 text-[#ff4dff]" />
-                  <Heart className="w-10 h-10 text-primary" />
+                  <Heart className="w-10 h-10 text-[#ff4dff]" />
                 </div>
               )}
             </div>
           )}
 
           {step === 'dashboard' && (
-            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-in fade-in zoom-in-95 duration-1000 pb-20 text-black">
+            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-scroll-open pb-20 text-black">
               <div className="lg:col-span-4 flex flex-col items-center gap-6">
                 <div className="w-full p-8 bg-white/20 backdrop-blur-md rounded-3xl border border-white/40 shadow-xl">
                   <h3 className="text-black font-headline text-center mb-6 flex items-center justify-center gap-2">
@@ -222,7 +221,7 @@ export default function BiotuneApp() {
                         CUSTOMIZE SOUNDS
                       </button>
                     </DialogTrigger>
-                    <DialogContent className="font-frijole bg-white/90 backdrop-blur-xl border-[#ff4dff]/40">
+                    <DialogContent className="font-headline bg-white/90 backdrop-blur-xl border-[#ff4dff]/40">
                       <DialogHeader>
                         <DialogTitle className="text-2xl text-[#ff4dff]">MAGIC SAMPLE IMPORTER</DialogTitle>
                         <DialogDescription className="text-black/60">Upload your own magical audio files to use in personalized mode.</DialogDescription>
