@@ -92,3 +92,13 @@
 .mascot-talk {
   animation: talk 0.2s infinite;
 }
+
+@keyframes bg-pulse {
+  0% { transform: scale(1.05); filter: brightness(1); }
+  50% { transform: scale(1.08); filter: brightness(1.2); }
+  100% { transform: scale(1.05); filter: brightness(1); }
+}
+
+.animate-bg-pulse {
+  animation: bg-pulse 0.2s ease-out;
+}

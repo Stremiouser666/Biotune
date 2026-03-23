@@ -28,6 +28,17 @@ export default function BiotuneApp() {
   const [loopBars, setLoopBars] = useState(4);
   const [audioMode, setAudioMode] = useState<AudioMode>('sampled');
   const [customFiles, setCustomFiles] = useState<{ [key: string]: string }>({});
+  const [isPulsing, setIsPulsing] = useState(false);
+
+  // Wire up drum hit reaction
+  useEffect(() => {
+    if (audioEngine) {
+      audioEngine.setOnDrumHit(() => {
+        setIsPulsing(true);
+        setTimeout(() => setIsPulsing(false), 150);
+      });
+    }
+  }, []);
 
   // Poll BPM and Mode for live display updates
   useEffect(() => {
@@ -98,15 +109,16 @@ export default function BiotuneApp() {
       <div 
         className={cn(
           "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2000ms] ease-in-out",
-          step === 'intro' ? "opacity-40 blur-[6px]" : "opacity-100 blur-0 scale-105"
+          step === 'intro' ? "opacity-40 blur-[6px]" : "opacity-100 blur-0 scale-105",
+          isPulsing && "animate-bg-pulse"
         )} 
       />
 
-      {/* 🌑 Overlay Layer */}
+      {/* 🌑 Overlay Layer - More subtle and atmospheric than before */}
       <div 
         className={cn(
-          "fixed inset-0 transition-all [transition-duration:2000ms] ease-in-out",
-          step === 'intro' ? "bg-white/40" : "bg-white/50"
+          "fixed inset-0 transition-all [transition-duration:2000ms] ease-in-out pointer-events-none",
+          step === 'intro' ? "bg-white/30 backdrop-blur-[2px]" : "bg-white/10"
         )} 
       />
 

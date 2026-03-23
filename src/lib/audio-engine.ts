@@ -24,8 +24,9 @@ class AudioEngine {
   private loopNotesCount: number = 8;
   private loopBarsCount: number = 4;
 
+  private onDrumHitCallback: (() => void) | null = null;
+
   constructor() {
-    // 1. Synthetic setup
     this.synth = new Tone.PolySynth(Tone.Synth).toDestination();
     this.drumSynth = new Tone.MembraneSynth().toDestination();
     
@@ -34,7 +35,6 @@ class AudioEngine {
       envelope: { attack: 0.1, release: 1, decay: 0.2, sustain: 0.5 }
     });
 
-    // 2. Sampled setup (Piano)
     this.pianoSampler = new Tone.Sampler({
       urls: {
         "A1": "A1.mp3",
@@ -54,7 +54,6 @@ class AudioEngine {
       }
     }).toDestination();
 
-    // 3. Sampled setup (Drums)
     this.drumPlayers = new Tone.Players({
       urls: {
         kick: "kick.mp3",
@@ -63,6 +62,10 @@ class AudioEngine {
       },
       baseUrl: "https://tonejs.github.io/audio/drum-samples/CR78/",
     }).toDestination();
+  }
+
+  setOnDrumHit(callback: () => void) {
+    this.onDrumHitCallback = callback;
   }
 
   async start() {
@@ -133,6 +136,8 @@ class AudioEngine {
 
   triggerDrum(type: 'soft' | 'hard' | 'roll') {
     if (!this.isStarted) return;
+    
+    if (this.onDrumHitCallback) this.onDrumHitCallback();
 
     if (this.mode === 'custom' && this.customDrumPlayers) {
       const p = this.customDrumPlayers;
