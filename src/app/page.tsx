@@ -150,7 +150,7 @@ export default function BiotuneApp() {
 
         <div className="w-full max-w-4xl flex flex-col items-center gap-8 pb-20">
           {step === 'intro' && (
-            <>
+            <div className="flex flex-col items-center gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
               <AnimatedText 
                 text={texts[0]} 
                 className="text-2xl md:text-4xl font-headline"
@@ -158,11 +158,11 @@ export default function BiotuneApp() {
               <button
                 id="btn"
                 onClick={handleCreateSound}
-                className="fixed bottom-[30px] left-1/2 -translate-x-1/2 px-[25px] py-[15px] text-[20px] bg-[#ff4dff] text-white rounded-[12px] shadow-[0_0_30px_rgba(255,77,255,0.9)] transition-all hover:scale-105 active:scale-95 z-50 font-headline"
+                className="px-8 py-5 text-xl md:text-2xl bg-[#ff4dff] text-white rounded-2xl shadow-[0_0_30px_rgba(255,77,255,0.8)] transition-all hover:scale-105 active:scale-95 z-50 font-headline whitespace-nowrap"
               >
                 ✨ CREATE MY SOUND
               </button>
-            </>
+            </div>
           )}
 
           {(step === 'activation' || step === 'magic') && (
