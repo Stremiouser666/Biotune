@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -7,24 +6,42 @@ import { cn } from "@/lib/utils";
 interface MascotProps {
   state: 'idle' | 'active' | 'reacting';
   intensity?: number;
+  isDancing?: boolean;
 }
 
-export function Mascot({ state, intensity = 0 }: MascotProps) {
+export function Mascot({ state, intensity = 0, isDancing = false }: MascotProps) {
   // Map intensity (0-1) to scale and glow
-  const scale = 1 + (intensity * 0.15);
-  const glowOpacity = 0.3 + (intensity * 0.5);
+  const scale = 1 + (intensity * 0.2);
+  const glowSize = 40 + (intensity * 60);
+  const glowOpacity = 0.2 + (intensity * 0.6);
 
   return (
     <div 
-      className="relative w-40 h-40 flex items-center justify-center animate-mascot-float"
+      className={cn(
+        "relative w-40 h-40 flex items-center justify-center transition-transform duration-300",
+        state === 'reacting' && !isDancing && "animate-mascot-float",
+        isDancing && "animate-mascot-dance"
+      )}
       style={{ transform: `scale(${scale})` }}
     >
-      {/* Glow effect behind mascot */}
+      {/* Outer Glow layers */}
       <div 
-        className={cn(
-          "absolute w-56 h-56 bg-white/40 rounded-full blur-3xl transition-opacity duration-300",
-        )} 
-        style={{ opacity: glowOpacity }}
+        className="absolute rounded-full blur-[60px] transition-all duration-300" 
+        style={{ 
+          width: `${glowSize * 1.5}px`, 
+          height: `${glowSize * 1.5}px`, 
+          backgroundColor: '#ff4dff',
+          opacity: glowOpacity * 0.4
+        }}
+      />
+      <div 
+        className="absolute rounded-full blur-[30px] transition-all duration-300" 
+        style={{ 
+          width: `${glowSize}px`, 
+          height: `${glowSize}px`, 
+          backgroundColor: '#ffffff',
+          opacity: glowOpacity
+        }}
       />
 
       {/* Mascot Body */}
@@ -39,9 +56,9 @@ export function Mascot({ state, intensity = 0 }: MascotProps) {
         src="https://i.postimg.cc/4xt9CHCv/Mascot_Face.png" 
         alt="Mascot Face"
         className={cn(
-          "absolute inset-0 w-full h-full object-contain pointer-events-none transition-transform duration-200",
+          "absolute inset-0 w-full h-full object-contain pointer-events-none transition-all duration-200",
           "mascot-blink",
-          state === 'reacting' && "mascot-talk"
+          (state === 'reacting' || intensity > 0.4) && "mascot-talk"
         )}
       />
     </div>
