@@ -55,7 +55,7 @@ export default function BiotuneApp() {
   const isSceneLongPress = useRef(false);
   const { toast } = useToast();
 
-  // Load shared session on mount
+  // Load shared session on mount only
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -382,7 +382,7 @@ export default function BiotuneApp() {
                             <button 
                               onPointerDown={() => startSceneLongPress(idx)}
                               onPointerUp={() => stopSceneLongPress(idx)}
-                              onPointerLeave={() => stopSceneLongPress(idx)}
+                              onPointerLeave={() => { if (sceneLongPressTimer.current) clearTimeout(sceneLongPressTimer.current); }}
                               onContextMenu={(e) => { e.preventDefault(); }}
                               className={cn(
                                 "py-3 rounded-xl font-headline text-xs transition-all relative",
