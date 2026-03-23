@@ -16,12 +16,20 @@ export function BiometricMonitor() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const aiIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Use Refs to ensure the AI polling interval always has the freshest data
+  const breathingRef = useRef(0);
+  const movementRef = useRef(0);
 
   const startMonitoring = async () => {
     try {
       setError(null);
       
       // 1. Microphone setup for breathing intensity
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Microphone access is not supported by your browser.');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = audioContextRef.current.createMediaStreamSource(stream);
@@ -30,7 +38,7 @@ export function BiometricMonitor() {
       source.connect(analyserRef.current);
 
       // 2. Accelerometer setup (with iOS permission check)
-      if (typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof (DeviceMotionEvent as any).requestPermission === 'function') {
         const permission = await (DeviceMotionEvent as any).requestPermission();
         if (permission !== 'granted') {
           throw new Error('Motion sensor permission denied. Please enable it in Settings.');
@@ -43,7 +51,7 @@ export function BiometricMonitor() {
       // Start real-time analysis
       analyzeMic();
       
-      // Start local polling for musical influence
+      // Start polling for musical influence
       startAiPolling();
 
     } catch (err: any) {
@@ -61,13 +69,30 @@ export function BiometricMonitor() {
   };
 
   const handleMotion = (event: DeviceMotionEvent) => {
-    const acc = event.accelerationIncludingGravity;
-    if (!acc) return;
+    let x = 0, y = 0, z = 0;
+
+    // Prefer raw acceleration if available (gravity removed)
+    if (event.acceleration && event.acceleration.x !== null) {
+      x = event.acceleration.x;
+      y = event.acceleration.y;
+      z = event.acceleration.z || 0;
+    } else if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x !== null) {
+      // Fallback to including gravity, relative to rest (9.8m/s^2)
+      x = event.accelerationIncludingGravity.x;
+      y = event.accelerationIncludingGravity.y;
+      z = (event.accelerationIncludingGravity.z || 0) - 9.8;
+    } else {
+      return;
+    }
     
-    // Calculate total movement intensity relative to gravity
-    const total = Math.sqrt((acc.x || 0)**2 + (acc.y || 0)**2 + (acc.z || 0)**2);
-    const normalized = Math.min(1, Math.max(0, (total - 9.8) / 15)); 
-    setMovement(normalized);
+    // Calculate total movement intensity
+    const total = Math.sqrt(x*x + y*y + z*z);
+    const normalized = Math.min(1, total / 12); // Normalize based on 12m/s^2 as "high intensity"
+    
+    // Smooth the movement data slightly
+    const smoothed = movementRef.current * 0.6 + normalized * 0.4;
+    setMovement(smoothed);
+    movementRef.current = smoothed;
   };
 
   const analyzeMic = () => {
@@ -77,8 +102,10 @@ export function BiometricMonitor() {
     analyserRef.current.getByteFrequencyData(dataArray);
     
     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    const normalized = Math.min(1, average / 100);
+    const normalized = Math.min(1, average / 110);
+    
     setBreathing(normalized);
+    breathingRef.current = normalized;
     
     // Live update for ambience volume (immediate feedback)
     audioEngine?.setAmbience(normalized);
@@ -89,10 +116,11 @@ export function BiometricMonitor() {
   const startAiPolling = () => {
     if (aiIntervalRef.current) clearInterval(aiIntervalRef.current);
     
-    // Polling every 2 seconds for a responsive local mapping
+    // Polling every 2 seconds to interpret biometrics into music
     aiIntervalRef.current = setInterval(async () => {
-      const currentBreathing = breathing;
-      const currentMovement = movement;
+      // Use Refs to avoid stale closure issues in setInterval
+      const currentBreathing = breathingRef.current;
+      const currentMovement = movementRef.current;
 
       try {
         const influence = await dynamicBiometricMusicGeneration({
@@ -100,7 +128,7 @@ export function BiometricMonitor() {
           movementIntensity: currentMovement
         });
         
-        // Apply suggestions to audio engine
+        // Apply influence to audio engine
         if (influence.tempoInfluence !== 0) {
           const currentBpm = audioEngine?.getBPM() || 80;
           audioEngine?.setBPM(currentBpm + influence.tempoInfluence * 15);
@@ -111,7 +139,6 @@ export function BiometricMonitor() {
         }
         
       } catch (e) {
-        // Log error but don't crash
         console.warn("Music Influence Error:", e);
       }
     }, 2000);
