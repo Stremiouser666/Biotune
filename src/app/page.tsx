@@ -40,7 +40,7 @@ export default function BiotuneApp() {
     if (audioEngine) {
       audioEngine.setOnDrumHit(() => {
         setIsPulsing(true);
-        setTimeout(() => setIsPulsing(false), 150);
+        setTimeout(() => setIsPulsing(false), 200);
       });
     }
   }, []);
@@ -113,17 +113,11 @@ export default function BiotuneApp() {
       {/* 🌌 Background Layer */}
       <div 
         className={cn(
-          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2500ms] cubic-bezier(0.23, 1, 0.32, 1)",
-          step === 'intro' ? "opacity-40 blur-[8px]" : "opacity-100 blur-0 scale(1.05)",
+          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:1500ms] cubic-bezier(0.23, 1, 0.32, 1)",
+          step === 'intro' 
+            ? "opacity-40 blur-[8px]" 
+            : "opacity-100 blur-0 scale(1.05) [filter:brightness(0.6)_saturate(0.7)]",
           isPulsing && "animate-bg-pulse"
-        )} 
-      />
-
-      {/* 🌑 Subtle Atmosphere Overlay */}
-      <div 
-        className={cn(
-          "fixed inset-0 transition-all [transition-duration:2500ms] ease-in-out pointer-events-none",
-          step === 'intro' ? "bg-white/20 backdrop-blur-[1px]" : "bg-transparent"
         )} 
       />
 
