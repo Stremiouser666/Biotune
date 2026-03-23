@@ -24,11 +24,21 @@ class AudioEngine {
   }
 
   async start() {
-    if (this.isStarted) return;
+    if (this.isStarted) {
+      Tone.getTransport().start();
+      return;
+    }
     await Tone.start();
     Tone.getTransport().bpm.value = 80;
     this.isStarted = true;
     Tone.getTransport().start();
+  }
+
+  stop() {
+    if (this.isStarted) {
+      Tone.getTransport().stop();
+      this.synth.releaseAll();
+    }
   }
 
   setBPM(bpm: number) {

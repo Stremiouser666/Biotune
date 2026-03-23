@@ -8,7 +8,7 @@ import { PianoRoll } from '@/components/piano-roll';
 import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { audioEngine } from '@/lib/audio-engine';
-import { Sparkles, Music, Waves, Heart } from 'lucide-react';
+import { Sparkles, Music, Waves, Heart, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
@@ -34,6 +34,11 @@ export default function BiotuneApp() {
     }, 3000);
   };
 
+  const handleGoHome = () => {
+    audioEngine?.stop();
+    setStep('intro');
+  };
+
   return (
     <main className="relative min-h-svh w-full overflow-hidden">
       {/* 🌌 Background Layer */}
@@ -54,6 +59,17 @@ export default function BiotuneApp() {
 
       {/* ✨ Sparkles Layer */}
       <div className="fixed inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.3)_1px,_transparent_1px)] bg-[length:40px_40px] animate-sparkle-move pointer-events-none" />
+
+      {/* 🏠 Home Button (Dashboard only) */}
+      {step === 'dashboard' && (
+        <button
+          onClick={handleGoHome}
+          className="fixed top-6 right-6 p-4 bg-white/40 backdrop-blur-md rounded-full border border-white/60 shadow-lg hover:scale-110 active:scale-95 transition-all z-50 group"
+          title="Go Home"
+        >
+          <Home className="w-6 h-6 text-[#ff4dff] group-hover:rotate-[-10deg] transition-transform" />
+        </button>
+      )}
 
       {/* 🎭 Main Content Container */}
       <div className="relative z-10 w-full h-svh flex flex-col items-center pt-[60px] px-6 text-center overflow-auto">
