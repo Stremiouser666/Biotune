@@ -1,10 +1,10 @@
-
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
 import { audioEngine } from '@/lib/audio-engine';
-import { Activity, Wind, AlertCircle, RefreshCcw, Timer } from 'lucide-react';
+import { Activity, Wind, AlertCircle, RefreshCcw, Timer, Sliders } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Slider } from "@/components/ui/slider";
 import { cn } from '@/lib/utils';
 
 interface BiometricMonitorProps {
@@ -17,6 +17,8 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restingBpm, setRestingBpm] = useState(80);
+  const [micSensitivity, setMicSensitivity] = useState(1);
+  const [motionSensitivity, setMotionSensitivity] = useState(1);
 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -34,6 +36,8 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const handleStep = (step: number) => { stepRef.current = step; };
     audioEngine?.addOnStep(handleStep);
     setRestingBpm(audioEngine?.getRestingBpm() || 80);
+    setMicSensitivity(audioEngine?.getMicSensitivity() || 1);
+    setMotionSensitivity(audioEngine?.getMotionSensitivity() || 1);
     return () => {
       audioEngine?.removeOnStep(handleStep);
       stopMonitoring();
@@ -95,17 +99,15 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     historyRef.current.push({ b: normalized, m: movementRef.current });
     if (historyRef.current.length > 200) historyRef.current.shift();
 
-    drawRealtime();
+    drawRealtime(dataArray);
     drawHistory();
     animationFrameRef.current = requestAnimationFrame(analyze);
   };
 
-  const drawRealtime = () => {
-    if (!canvasRef.current || !analyserRef.current) return;
+  const drawRealtime = (dataArray: Uint8Array) => {
+    if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
     ctx.clearRect(0, 0, 300, 60);
     ctx.fillStyle = '#ff4dff33';
     dataArray.forEach((val, i) => {
@@ -168,6 +170,16 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     audioEngine?.setRestingBpm(current);
   };
 
+  const updateMicSensitivity = (val: number) => {
+    setMicSensitivity(val);
+    audioEngine?.setMicSensitivity(val);
+  };
+
+  const updateMotionSensitivity = (val: number) => {
+    setMotionSensitivity(val);
+    audioEngine?.setMotionSensitivity(val);
+  };
+
   return (
     <div className="flex flex-col gap-4 items-center w-full">
       {error && (
@@ -206,6 +218,19 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
             <div className="flex flex-col items-end">
               <button onClick={captureRestingBpm} className="flex items-center gap-1 text-[8px] font-headline bg-primary text-white px-2 py-1 rounded-md mb-1"><Timer className="w-2.5 h-2.5" /> SET BASELINE</button>
               <div className="text-[8px] font-headline opacity-40">TARGET: {restingBpm.toFixed(0)} BPM</div>
+            </div>
+          </div>
+          <div className="w-full space-y-4 pt-4 border-t border-black/5">
+            <div className="flex items-center gap-2 text-[9px] font-headline opacity-60"><Sliders className="w-3 h-3" /> CALIBRATION</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[7px] font-headline opacity-40"><span>MIC SENS</span><span>{micSensitivity.toFixed(1)}x</span></div>
+                <Slider value={[micSensitivity]} max={3} min={0.2} step={0.1} onValueChange={([v]) => updateMicSensitivity(v)} />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[7px] font-headline opacity-40"><span>MOTION SENS</span><span>{motionSensitivity.toFixed(1)}x</span></div>
+                <Slider value={[motionSensitivity]} max={3} min={0.2} step={0.1} onValueChange={([v]) => updateMotionSensitivity(v)} />
+              </div>
             </div>
           </div>
         </div>

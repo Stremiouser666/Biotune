@@ -153,7 +153,6 @@ class AudioEngine {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
         
-        // Ensure Tone context is running
         if (Tone.getContext().state !== 'running') {
           await Tone.start();
         }
@@ -545,13 +544,17 @@ class AudioEngine {
 
     notesToPlay.forEach(note => {
       this.sendMidi(0x90, Tone.Frequency(note).toMidi(), 100);
-      if (this.mode === 'custom' && this.customPianoSampler) {
-        this.customPianoSampler.volume.value = targetDb;
-        this.customPianoSampler.triggerAttackRelease(note, this.noteLength, time);
-      } else if (this.mode === 'sampled' && this.pianoSampler && this.isLoaded) {
-        this.pianoSampler.volume.value = targetDb;
-        this. pianoSampler.triggerAttackRelease(note, this.noteLength, time);
-      } else if (this.mode === 'synth') {
+
+      const isSampledReady = this.mode === 'sampled' && this.pianoSampler && this.isLoaded;
+      const isCustomReady = this.mode === 'custom' && this.customPianoSampler;
+
+      if (isCustomReady) {
+        this.customPianoSampler!.volume.value = targetDb;
+        this.customPianoSampler!.triggerAttackRelease(note, this.noteLength, time);
+      } else if (isSampledReady) {
+        this.pianoSampler!.volume.value = targetDb;
+        this.pianoSampler!.triggerAttackRelease(note, this.noteLength, time);
+      } else {
         this.synth.volume.value = targetDb;
         this.synth.triggerAttackRelease(note, this.noteLength, time);
       }

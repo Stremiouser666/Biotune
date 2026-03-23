@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -135,7 +134,11 @@ export function DrumPads({ sessionVersion = 0 }: DrumPadsProps) {
         </div>
       ))}
       <button 
-        onClick={() => { audioEngine?.randomizeDrums(); setGrid([...audioEngine!.getDrumGrid().map(r => [...r])]); }}
+        onClick={() => { 
+          if (!audioEngine) return;
+          audioEngine.randomizeDrums(); 
+          setGrid([...audioEngine.getDrumGrid().map(r => [...r])]); 
+        }}
         className="flex items-center justify-center gap-2 py-3 bg-white/40 border border-white/60 rounded-2xl font-headline text-xs hover:bg-white/60 transition-all active:scale-95 mt-2"
       >
         <Dice5 className="w-4 h-4 text-primary" />

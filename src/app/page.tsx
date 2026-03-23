@@ -8,7 +8,7 @@ import { DrumPads } from '@/components/drum-pads';
 import { BiometricMonitor } from '@/components/biometric-monitor';
 import { FullscreenVisualizer } from '@/components/fullscreen-visualizer';
 import { audioEngine, type AudioMode, type OscillatorType, type NoteLength } from '@/lib/audio-engine';
-import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2, Link, Moon } from 'lucide-react';
+import { Sparkles, Music, Save, RotateCcw, Trash2, Home, Layers, Upload, Wand2, Activity, Settings2, Play, Pause, Volume2, Share2, Timer, Mic, Square, Zap, Undo, Dice5, Repeat, Sliders, Maximize2, Link, Moon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,6 @@ export default function BiotuneApp() {
   const [accordionValue, setAccordionValue] = useState<string>("biometrics");
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // Stored values for sliders to avoid expensive serializations
   const [masterVolume, setMasterVolume] = useState(1);
   const [swing, setSwing] = useState(0);
   const [reverbWet, setReverbWet] = useState(0.25);
@@ -73,7 +72,7 @@ export default function BiotuneApp() {
         console.error("Failed to parse shared session", e);
       }
     }
-  }, []); // Only once on mount
+  }, []);
 
   useEffect(() => {
     if (audioEngine) {
@@ -294,7 +293,7 @@ export default function BiotuneApp() {
 
   const handleSceneClick = (idx: number) => {
     if (isSceneLongPress.current) {
-      isSceneLongPress.current = false;
+      isLongPress.current = false;
       return;
     }
     audioEngine?.setScene(idx);
@@ -513,7 +512,10 @@ export default function BiotuneApp() {
                       </div>
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-black/5">
                         <span className="text-[10px] font-headline opacity-60">SAMPLES</span>
-                        <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-4 py-1.5 bg-primary text-white rounded-lg font-headline text-[9px] min-w-[70px]">{audioMode.toUpperCase()}</button>
+                        <div className="flex items-center gap-2">
+                          {!isLoaded && audioMode === 'sampled' && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                          <button onClick={() => { const modes: AudioMode[] = ['synth', 'sampled', 'custom']; const next = modes[(modes.indexOf(audioMode) + 1) % 3]; setAudioMode(next); audioEngine?.setMode(next); }} className="px-4 py-1.5 bg-primary text-white rounded-lg font-headline text-[9px] min-w-[70px]">{audioMode.toUpperCase()}</button>
+                        </div>
                       </div>
                       <button onClick={handleMidiExport} className="w-full py-2.5 bg-white/40 border border-primary/40 rounded-xl font-headline text-[10px] flex items-center justify-center gap-2"><Link className="w-3 h-3" /> EXPORT PATTERN DATA</button>
                     </div>
