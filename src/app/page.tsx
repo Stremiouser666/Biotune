@@ -44,7 +44,7 @@ export default function BiotuneApp() {
       {/* 🌌 Background Layer */}
       <div 
         className={cn(
-          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all duration-[2000ms] ease-in-out",
+          "fixed inset-0 bg-[url('https://i.postimg.cc/nhW8Thn8/Background.png')] bg-center bg-cover bg-no-repeat transition-all [transition-duration:2000ms] ease-in-out",
           step === 'intro' ? "opacity-40 blur-[6px]" : "opacity-100 blur-0 scale-105"
         )} 
       />
@@ -52,7 +52,7 @@ export default function BiotuneApp() {
       {/* 🌑 Overlay Layer */}
       <div 
         className={cn(
-          "fixed inset-0 transition-all duration-[2000ms] ease-in-out",
+          "fixed inset-0 transition-all [transition-duration:2000ms] ease-in-out",
           step === 'intro' ? "bg-white/40" : "bg-white/50"
         )} 
       />
