@@ -3,42 +3,42 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import Mascot from "@/components/mascot"; // 👈 your existing mascot
+import { Mascot } from "@/components/mascot"; // 👈 your real mascot
 
 const steps = [
   {
     title: "🎵 Welcome",
     text: "Let’s learn how to make your own music!",
-    mood: "excited",
+    mascot: { state: "active", intensity: 0.3, isDancing: false },
   },
   {
     title: "🎹 Make a Melody",
     text: "Click on the piano grid to place notes and press play.",
     target: "#piano-roll",
-    mood: "teaching",
+    mascot: { state: "reacting", intensity: 0.5, isDancing: false },
   },
   {
     title: "🥁 Add Beats",
     text: "Tap the drum pads to create your rhythm.",
     target: "#drum-pads",
-    mood: "grooving",
+    mascot: { state: "active", intensity: 0.7, isDancing: true },
   },
   {
     title: "🤖 AI Mode",
     text: "Turn on AI to generate music automatically!",
     target: "#ai-toggle",
-    mood: "magic",
+    mascot: { state: "reacting", intensity: 0.6, isDancing: false },
   },
   {
     title: "🎨 Visuals",
     text: "Watch cool animations that react to your music.",
     target: "#visualizer",
-    mood: "amazed",
+    mascot: { state: "active", intensity: 0.9, isDancing: true },
   },
   {
     title: "🚀 Ready!",
     text: "Now it’s your turn—go make something awesome!",
-    mood: "celebrating",
+    mascot: { state: "active", intensity: 1, isDancing: true },
   },
 ];
 
@@ -47,7 +47,7 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
   const [dontShow, setDontShow] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 🎧 Sound effect
+  // 🎧 Sound
   useEffect(() => {
     audioRef.current = new Audio("/sounds/click.mp3");
   }, []);
@@ -68,7 +68,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
     if (step > 0) setStep(step - 1);
   };
 
-  // 💾 Save preference
   const handleClose = () => {
     if (dontShow) {
       localStorage.setItem("hideTutorial", "true");
@@ -76,7 +75,7 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
     onClose?.();
   };
 
-  // 🎯 Highlight UI
+  // 🎯 Highlight logic
   useEffect(() => {
     const selector = steps[step]?.target;
     const el = selector ? document.querySelector(selector) : null;
@@ -91,16 +90,22 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
     };
   }, [step]);
 
+  const mascotProps = steps[step].mascot;
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
       
       {/* 🧑 Mascot + Speech */}
-      <div className="absolute bottom-6 left-6 flex items-end gap-3">
-        <div className="bg-white p-3 rounded-2xl shadow-lg max-w-xs">
-          <p className="text-sm">{steps[step].text}</p>
+      <div className="absolute bottom-6 left-6 flex items-end gap-4">
+        <div className="bg-white p-4 rounded-2xl shadow-lg max-w-xs">
+          <p className="text-sm font-medium">{steps[step].text}</p>
         </div>
 
-        <Mascot mood={steps[step].mood} />
+        <Mascot
+          state={mascotProps.state}
+          intensity={mascotProps.intensity}
+          isDancing={mascotProps.isDancing}
+        />
       </div>
 
       {/* Main Card */}
