@@ -49,19 +49,19 @@ class AudioEngine {
   private drumPlayers: Tone.Players | null = null;
   private customPianoSampler: Tone.Sampler | null = null;
   private customDrumPlayers: Tone.Players | null = null;
-  
+
   private filter: Tone.Filter;
   private delay: Tone.FeedbackDelay;
   private reverb: Tone.Reverb;
   private masterGain: Tone.Gain;
   private recorder: Tone.Recorder;
-  
+
   private isStarted = false;
   private isLoaded = false;
   private mode: AudioMode = 'sampled';
   private chordMode: boolean = false;
   private currentSlot: string = 'A';
-  
+
   private scenes: SceneData[] = Array(4).fill(null).map(() => ({
     melodyGrid: Array(8).fill(null).map(() => Array(16).fill(false)),
     drumGrid: Array(4).fill(null).map(() => Array(16).fill(false)),
@@ -69,7 +69,7 @@ class AudioEngine {
     drumLength: 16,
     pitchOffsets: Array(8).fill(0),
   }));
-  
+
   private activeSceneIndex = 0;
   private drumMutes: boolean[] = [false, false, false, false];
   private oscillatorType: OscillatorType = 'triangle';
@@ -85,10 +85,10 @@ class AudioEngine {
   private restingBpm: number = 80;
   private isChaining: boolean = false;
   private undoStack: string[] = [];
-  
+
   private midiAccess: any | null = null;
   private midiOutput: any | null = null;
-  
+
   private micStream: MediaStream | null = null;
   private micAnalyser: AnalyserNode | null = null;
   private micPromise: Promise<AnalyserNode> | null = null;
@@ -108,7 +108,7 @@ class AudioEngine {
 
     this.synth = new Tone.PolySynth(Tone.Synth).connect(this.masterGain);
     this.drumSynth = new Tone.MembraneSynth().connect(this.masterGain);
-    
+
     this.synth.set({
       oscillator: { type: "triangle" },
       envelope: { attack: 0.1, release: 1.2, decay: 0.3, sustain: 0.4 }
@@ -122,11 +122,13 @@ class AudioEngine {
     }).connect(this.masterGain);
 
     if (typeof navigator !== 'undefined' && (navigator as any).requestMIDIAccess) {
-      (navigator as any).requestMIDIAccess().then((access: any) => {
-        this.midiAccess = access;
-        this.midiOutput = Array.from(access.outputs.values())[0] as any || null;
-      });
-    }
+  (navigator as any).requestMIDIAccess().then((access: any) => {
+    this.midiAccess = access;
+    this.midiOutput = Array.from(access.outputs.values())[0] as any || null;
+  }).catch((e: any) => {
+    console.warn("MIDI access restricted:", e.message);
+  });
+}
 
     this.loadSession();
   }
@@ -134,7 +136,7 @@ class AudioEngine {
   private initSampler(useCDN = false) {
     if (typeof window === 'undefined') return;
     const baseUrl = useCDN ? "https://tonejs.github.io/audio/casio/" : "/samples/casio/";
-    
+
     this.pianoSampler = new Tone.Sampler({
       urls: { "A1": "A1.mp3", "A2": "A2.mp3", "A3": "A3.mp3", "A4": "A4.mp3", "A5": "A5.mp3", "C1": "C1.mp3", "C2": "C2.mp3", "C3": "C3.mp3", "C4": "C4.mp3", "C5": "C5.mp3" },
       baseUrl,
@@ -153,7 +155,7 @@ class AudioEngine {
     this.micPromise = (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mic not supported.');
-        
+
         if (Tone.getContext().state !== 'running') {
           await Tone.start();
         }
@@ -211,7 +213,7 @@ class AudioEngine {
   public getSlot() { return this.currentSlot; }
   public setChordMode(active: boolean) { this.chordMode = active; this.saveSession(); }
   public getChordMode() { return this.chordMode; }
-  
+
   public setScene(index: number) {
     if (index < 0 || index >= this.scenes.length) return;
     this.activeSceneIndex = index;
@@ -388,7 +390,7 @@ class AudioEngine {
     this.repeatEvent = Tone.getTransport().scheduleRepeat((time) => {
       const scene = this.scenes[this.activeSceneIndex];
       const maxLen = Math.max(scene.melodyLength, scene.drumLength);
-      
+
       const melodyStep = this.currentStep % scene.melodyLength;
       scene.melodyGrid.forEach((row, rowIndex) => {
         if (row[melodyStep]) this.triggerNoteAtTime(rowIndex, time);
@@ -462,7 +464,7 @@ class AudioEngine {
     this.scenes[this.activeSceneIndex].melodyGrid[row][col] = !this.scenes[this.activeSceneIndex].melodyGrid[row][col]; 
     this.saveSession();
   }
-  
+
   randomizeMelody() {
     this.pushUndo();
     const pentatonicSteps = [0, 2, 4, 7, 9];
@@ -537,7 +539,7 @@ class AudioEngine {
     const offset = scene.pitchOffsets[rowIndex];
     const baseNote = this.notes[rowIndex];
     const noteWithOffset = Tone.Frequency(baseNote).transpose(offset).toNote();
-    
+
     const notesToPlay = [noteWithOffset];
     if (this.chordMode) {
       notesToPlay.push(Tone.Frequency(noteWithOffset).transpose(4).toNote());
