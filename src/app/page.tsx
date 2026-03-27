@@ -58,10 +58,12 @@ export default function BiotuneApp() {
   const { toast } = useToast();
 
   useEffect(() => {
+  if (step === 'dashboard') {
     const hidden = localStorage.getItem("hideTutorial") === "true";
     setShowTutorial(!hidden);
     setTutorialReady(true);
-  }, []);
+  }
+}, [step]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
