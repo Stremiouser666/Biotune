@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mascot } from "@/components/mascot"; // 👈 your real mascot
+import { Mascot } from "@/components/mascot";
 
 const steps = [
   {
@@ -12,32 +12,32 @@ const steps = [
     mascot: { state: "active", intensity: 0.3, isDancing: false },
   },
   {
-    title: "🎹 Make a Melody",
-    text: "Click on the piano grid to place notes and press play.",
+    title: "🎹 Melody",
+    text: "Tap the grid to create your melody.",
     target: "#piano-roll",
     mascot: { state: "reacting", intensity: 0.5, isDancing: false },
   },
   {
-    title: "🥁 Add Beats",
-    text: "Tap the drum pads to create your rhythm.",
+    title: "🥁 Rhythm",
+    text: "Add beats using the drum pads.",
     target: "#drum-pads",
     mascot: { state: "active", intensity: 0.7, isDancing: true },
   },
   {
-    title: "🤖 AI Mode",
-    text: "Turn on AI to generate music automatically!",
+    title: "🎛 Sounds",
+    text: "Change sounds and experiment!",
     target: "#ai-toggle",
     mascot: { state: "reacting", intensity: 0.6, isDancing: false },
   },
   {
     title: "🎨 Visuals",
-    text: "Watch cool animations that react to your music.",
+    text: "Watch your music come alive!",
     target: "#visualizer",
     mascot: { state: "active", intensity: 0.9, isDancing: true },
   },
   {
-    title: "🚀 Ready!",
-    text: "Now it’s your turn—go make something awesome!",
+    title: "🚀 Go!",
+    text: "Now go make something awesome!",
     mascot: { state: "active", intensity: 1, isDancing: true },
   },
 ];
@@ -47,7 +47,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
   const [dontShow, setDontShow] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 🎧 Sound
   useEffect(() => {
     audioRef.current = new Audio("/sounds/click.mp3");
   }, []);
@@ -69,13 +68,10 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
   };
 
   const handleClose = () => {
-    if (dontShow) {
-      localStorage.setItem("hideTutorial", "true");
-    }
+    if (dontShow) localStorage.setItem("hideTutorial", "true");
     onClose?.();
   };
 
-  // 🎯 Highlight logic
   useEffect(() => {
     const selector = steps[step]?.target;
     const el = selector ? document.querySelector(selector) : null;
@@ -93,9 +89,9 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
   const mascotProps = steps[step].mascot;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      
-      {/* 🧑 Mascot + Speech */}
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100]">
+
+      {/* Mascot */}
       <div className="absolute bottom-6 left-6 flex items-end gap-4">
         <div className="bg-white p-4 rounded-2xl shadow-lg max-w-xs">
           <p className="text-sm font-medium">{steps[step].text}</p>
@@ -108,7 +104,7 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
         />
       </div>
 
-      {/* Main Card */}
+      {/* Card */}
       <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center">
         <AnimatePresence mode="wait">
           <motion.div
@@ -116,7 +112,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
           >
             <h2 className="text-2xl font-bold mb-4">
               {steps[step].title}
@@ -124,7 +119,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
           </motion.div>
         </AnimatePresence>
 
-        {/* Buttons */}
         <div className="flex justify-between mt-6">
           <Button onClick={prev} disabled={step === 0} variant="outline">
             Back
@@ -137,17 +131,15 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
           )}
         </div>
 
-        {/* 💾 Toggle */}
-        <div className="mt-4 text-sm flex items-center justify-center gap-2">
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={dontShow}
             onChange={() => setDontShow(!dontShow)}
           />
-          <span>Don’t show this again</span>
+          Don’t show again
         </div>
 
-        {/* Dots */}
         <div className="flex justify-center mt-4 gap-2">
           {steps.map((_, i) => (
             <div
@@ -160,13 +152,11 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Highlight styling */}
       <style jsx global>{`
         .tutorial-highlight {
           outline: 3px solid #00f0ff;
           border-radius: 12px;
           box-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
-          position: relative;
           z-index: 60;
         }
       `}</style>
