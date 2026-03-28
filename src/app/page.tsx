@@ -15,9 +15,7 @@ import { EngineSection } from '@/components/EngineSection';
 import { MemorySection } from '@/components/MemorySection';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
-import {
-  Accordion,
-} from "@/components/ui/accordion";
+import { Accordion } from "@/components/ui/accordion";
 
 type FlowStep = 'intro' | 'activation' | 'magic' | 'dashboard';
 
@@ -52,6 +50,7 @@ export default function BiotuneApp() {
   const tapTimes = useRef<number[]>([]);
   const sceneLongPressTimer = useRef<NodeJS.Timeout | null>(null);
   const isSceneLongPress = useRef(false);
+  const lastSceneRef = useRef<number | null>(null); // FIX 5: scene dedup
   const { toast } = useToast();
 
   // Tutorial — only show on dashboard
@@ -109,8 +108,12 @@ export default function BiotuneApp() {
       audioEngine.addOnDrumHit(handleHit);
       audioEngine.addOnLoad(setIsLoaded);
       audioEngine.addOnSceneChange((idx) => {
-        setActiveScene(idx);
-        setSessionVersion(v => v + 1);
+        // FIX 5: Only update if scene actually changed
+        if (lastSceneRef.current !== idx) {
+          setActiveScene(idx);
+          setSessionVersion(v => v + 1);
+          lastSceneRef.current = idx;
+        }
       });
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.code === 'Space' && step === 'dashboard' && !isFullscreen) {
@@ -130,14 +133,17 @@ export default function BiotuneApp() {
     }
   }, [step, isFullscreen]);
 
-  // BPM polling
+  // FIX 6: BPM polling — only update if value actually changed
   useEffect(() => {
     if (step !== 'dashboard') return;
     const interval = setInterval(() => {
-      if (audioEngine) setBpm(audioEngine.getBPM());
+      if (audioEngine) {
+        const current = audioEngine.getBPM();
+        if (Math.abs(current - bpm) > 0.1) setBpm(current);
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, bpm]);
 
   // Onboarding
   useEffect(() => {
