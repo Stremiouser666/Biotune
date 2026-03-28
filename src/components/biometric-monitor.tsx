@@ -25,12 +25,15 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const historyCanvasRef = useRef<HTMLCanvasElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const breathingRef = useRef(0);
   const movementRef = useRef(0);
   const historyRef = useRef<{ b: number, m: number }[]>([]);
   const isMonitoringRef = useRef(false);
   const stepRef = useRef(0);
+
+  // FIX 2: Throttle parent updates — max once per 100ms
+  const lastParentUpdateRef = useRef(0);
 
   useEffect(() => {
     const handleStep = (step: number) => { stepRef.current = step; };
@@ -80,7 +83,11 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const sens = audioEngine?.getMotionSensitivity() || 1.0;
     const normalized = Math.min(1, (total / 15) * sens);
     movementRef.current = movementRef.current * 0.7 + normalized * 0.3;
-    setMovement(movementRef.current);
+
+    // FIX 1: Only update React state if value changed meaningfully
+    if (Math.abs(movement - movementRef.current) > 0.02) {
+      setMovement(movementRef.current);
+    }
   };
 
   const analyze = () => {
@@ -90,18 +97,32 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     const sens = audioEngine?.getMicSensitivity() || 1.0;
     const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
     const normalized = Math.min(1, (avg / 120) * sens);
-    
-    breathingRef.current = normalized;
-    setBreathing(normalized);
-    onBreathingUpdate?.(normalized);
+
+    // FIX 1: Only update React state if value changed meaningfully
+    if (Math.abs(breathingRef.current - normalized) > 0.02) {
+      breathingRef.current = normalized;
+      setBreathing(normalized);
+    }
+
     audioEngine?.setAmbience(normalized);
+
+    // FIX 2: Throttle parent callback to max once per 100ms
+    const now = Date.now();
+    if (now - lastParentUpdateRef.current > 100) {
+      onBreathingUpdate?.(normalized);
+      lastParentUpdateRef.current = now;
+    }
 
     historyRef.current.push({ b: normalized, m: movementRef.current });
     if (historyRef.current.length > 200) historyRef.current.shift();
 
     drawRealtime(dataArray);
     drawHistory();
-    animationFrameRef.current = requestAnimationFrame(analyze);
+
+    // FIX 4: Reduce canvas frame rate to ~20fps instead of 60fps
+    setTimeout(() => {
+      animationFrameRef.current = requestAnimationFrame(analyze);
+    }, 50);
   };
 
   const drawRealtime = (dataArray: Uint8Array) => {
@@ -125,7 +146,7 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
     if (!ctx) return;
     ctx.clearRect(0, 0, 300, 60);
     ctx.lineWidth = 2;
-    
+
     ctx.strokeStyle = '#ff4dff66';
     ctx.beginPath();
     historyRef.current.forEach((h, i) => {
@@ -154,9 +175,9 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
       const base = audioEngine.getRestingBpm();
       let nextBpm = currentBpm;
 
-      if (avg < 0.3) nextBpm -= 0.5; 
+      if (avg < 0.3) nextBpm -= 0.5;
       else if (avg > 0.7) nextBpm += 0.5;
-      else if (Math.abs(currentBpm - base) > 0.2) nextBpm += (base - currentBpm) * 0.05; 
+      else if (Math.abs(currentBpm - base) > 0.2) nextBpm += (base - currentBpm) * 0.05;
       else nextBpm = base;
 
       audioEngine.setBPM(nextBpm, true);
@@ -188,16 +209,22 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
           <AlertTitle>Sync Required</AlertTitle>
           <AlertDescription className="flex flex-col gap-2">
             <span className="text-xs">{error}</span>
-            <button onClick={startMonitoring} className="flex items-center gap-2 text-xs font-headline text-primary bg-white px-3 py-2 rounded-lg w-fit"><RefreshCcw className="w-3 h-3" /> RETRY SYNC</button>
+            <button onClick={startMonitoring} className="flex items-center gap-2 text-xs font-headline text-primary bg-white px-3 py-2 rounded-lg w-fit">
+              <RefreshCcw className="w-3 h-3" /> RETRY SYNC
+            </button>
           </AlertDescription>
         </Alert>
       )}
 
       {!isMonitoring ? (
-        <button onClick={startMonitoring} className="px-10 py-5 rounded-full bg-white/20 border-2 border-white/40 font-headline hover:bg-white/40 transition-all shadow-xl">CONNECT BIOMETRICS</button>
+        <button onClick={startMonitoring} className="px-10 py-5 rounded-full bg-white/20 border-2 border-white/40 font-headline hover:bg-white/40 transition-all shadow-xl">
+          CONNECT BIOMETRICS
+        </button>
       ) : (
         <div className="w-full flex flex-col items-center gap-4 bg-white/30 backdrop-blur-xl p-6 rounded-3xl border border-white/40 shadow-lg">
-          <div className="flex items-center gap-2 font-headline text-primary animate-pulse"><Activity className="w-4 h-4" /> BIOMETRICS ACTIVE</div>
+          <div className="flex items-center gap-2 font-headline text-primary animate-pulse">
+            <Activity className="w-4 h-4" /> BIOMETRICS ACTIVE
+          </div>
           <div className="relative w-full h-12 rounded-lg bg-black/5 overflow-hidden">
             <canvas ref={canvasRef} width="300" height="60" className="absolute inset-0 w-full h-full" />
             <canvas ref={historyCanvasRef} width="300" height="60" className="absolute inset-0 w-full h-full pointer-events-none" />
@@ -216,19 +243,27 @@ export function BiometricMonitor({ onBreathingUpdate }: BiometricMonitorProps) {
               </div>
             </div>
             <div className="flex flex-col items-end">
-              <button onClick={captureRestingBpm} className="flex items-center gap-1 text-[8px] font-headline bg-primary text-white px-2 py-1 rounded-md mb-1"><Timer className="w-2.5 h-2.5" /> SET BASELINE</button>
+              <button onClick={captureRestingBpm} className="flex items-center gap-1 text-[8px] font-headline bg-primary text-white px-2 py-1 rounded-md mb-1">
+                <Timer className="w-2.5 h-2.5" /> SET BASELINE
+              </button>
               <div className="text-[8px] font-headline opacity-40">TARGET: {restingBpm.toFixed(0)} BPM</div>
             </div>
           </div>
           <div className="w-full space-y-4 pt-4 border-t border-black/5">
-            <div className="flex items-center gap-2 text-[9px] font-headline opacity-60"><Sliders className="w-3 h-3" /> CALIBRATION</div>
+            <div className="flex items-center gap-2 text-[9px] font-headline opacity-60">
+              <Sliders className="w-3 h-3" /> CALIBRATION
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <div className="flex justify-between text-[7px] font-headline opacity-40"><span>MIC SENS</span><span>{micSensitivity.toFixed(1)}x</span></div>
+                <div className="flex justify-between text-[7px] font-headline opacity-40">
+                  <span>MIC SENS</span><span>{micSensitivity.toFixed(1)}x</span>
+                </div>
                 <Slider value={[micSensitivity]} max={3} min={0.2} step={0.1} onValueChange={([v]) => updateMicSensitivity(v)} />
               </div>
               <div className="space-y-1.5">
-                <div className="flex justify-between text-[7px] font-headline opacity-40"><span>MOTION SENS</span><span>{motionSensitivity.toFixed(1)}x</span></div>
+                <div className="flex justify-between text-[7px] font-headline opacity-40">
+                  <span>MOTION SENS</span><span>{motionSensitivity.toFixed(1)}x</span>
+                </div>
                 <Slider value={[motionSensitivity]} max={3} min={0.2} step={0.1} onValueChange={([v]) => updateMotionSensitivity(v)} />
               </div>
             </div>
