@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Mascot } from "@/components/mascot";
@@ -42,7 +42,8 @@ const steps = [
   },
 ];
 
-export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
+// FIX 7: Wrap in React.memo so it doesn't re-render when parent state changes
+const TutorialScreen = React.memo(function TutorialScreen({ onClose }: { onClose?: () => void }) {
   const [step, setStep] = useState(0);
   const [dontShow, setDontShow] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -69,9 +70,7 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
   };
 
   const handleClose = () => {
-    if (dontShow) {
-      localStorage.setItem("hideTutorial", "true");
-    }
+    if (dontShow) localStorage.setItem("hideTutorial", "true");
     onClose?.();
   };
 
@@ -91,8 +90,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-
-      {/* Mascot + Speech */}
       <div className="absolute bottom-6 left-6 flex items-end gap-4">
         <div className="bg-white p-4 rounded-2xl shadow-lg max-w-xs">
           <p className="text-sm font-medium">{steps[step].text}</p>
@@ -104,7 +101,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
         />
       </div>
 
-      {/* Main Card */}
       <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center">
         <AnimatePresence mode="wait">
           <motion.div
@@ -114,16 +110,12 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
           >
-            <h2 className="text-2xl font-bold mb-4">
-              {steps[step].title}
-            </h2>
+            <h2 className="text-2xl font-bold mb-4">{steps[step].title}</h2>
           </motion.div>
         </AnimatePresence>
 
         <div className="flex justify-between mt-6">
-          <Button onClick={prev} disabled={step === 0} variant="outline">
-            Back
-          </Button>
+          <Button onClick={prev} disabled={step === 0} variant="outline">Back</Button>
           {step === steps.length - 1 ? (
             <Button onClick={handleClose}>Start</Button>
           ) : (
@@ -132,22 +124,13 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
         </div>
 
         <div className="mt-4 text-sm flex items-center justify-center gap-2">
-          <input
-            type="checkbox"
-            checked={dontShow}
-            onChange={() => setDontShow(!dontShow)}
-          />
+          <input type="checkbox" checked={dontShow} onChange={() => setDontShow(!dontShow)} />
           <span>Don't show this again</span>
         </div>
 
         <div className="flex justify-center mt-4 gap-2">
           {steps.map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 w-2 rounded-full ${
-                i === step ? "bg-black" : "bg-gray-300"
-              }`}
-            />
+            <div key={i} className={`h-2 w-2 rounded-full ${i === step ? "bg-black" : "bg-gray-300"}`} />
           ))}
         </div>
       </div>
@@ -163,4 +146,6 @@ export default function TutorialScreen({ onClose }: { onClose?: () => void }) {
       `}</style>
     </div>
   );
-}
+});
+
+export default TutorialScreen;
